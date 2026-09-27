@@ -1158,22 +1158,39 @@ export function Dashboard() {
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2.5">
-        {[
-          { to: '/safenet', icon: <ShieldCheck size={27}/>, title: 'InSafe Network', color: 'text-brand', bg: 'bg-brand-soft' },
-          { to: '/fake-call', icon: <PhoneCall size={27}/>, title: 'Fake Call', color: 'text-blue', bg: 'bg-blue-soft' },
-          { to: '/mute-call', icon: <VolumeX size={27}/>, title: 'Mute Call', color: 'text-gold', bg: 'bg-secondary' }
-        ].map(item => (
-          <Link
-            key={item.to}
-            to={item.to}
-            className="screen-card flex min-h-28 flex-col items-center justify-center gap-3 px-1 text-center transition-transform hover:-translate-y-1"
-          >
-            <span className={`grid h-11 w-11 place-items-center rounded-[14px] ${item.bg} ${item.color}`}>
-              {item.icon}
-            </span>
-            <span className="text-xs font-bold leading-4">{item.title}</span>
-          </Link>
-        ))}
+        <a
+          href="tel:1091"
+          className="screen-card flex min-h-28 flex-col items-center justify-center gap-2.5 px-1 text-center transition-transform hover:-translate-y-1 active:scale-95 group border-rose-200/50 dark:border-rose-900/30"
+          title="Direct Call Women Safety Helpline 1091"
+        >
+          <span className="grid h-11 w-11 place-items-center rounded-[14px] bg-rose-500/10 text-rose-600 dark:text-rose-400 group-hover:bg-rose-500/20 transition-colors">
+            <Phone size={24} />
+          </span>
+          <div className="flex flex-col items-center">
+            <span className="text-xs font-bold leading-4">Women Safety</span>
+            <span className="text-[10px] font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">Call 1091</span>
+          </div>
+        </a>
+
+        <Link
+          to="/fake-call"
+          className="screen-card flex min-h-28 flex-col items-center justify-center gap-2.5 px-1 text-center transition-transform hover:-translate-y-1 active:scale-95"
+        >
+          <span className="grid h-11 w-11 place-items-center rounded-[14px] bg-blue-soft text-blue">
+            <PhoneCall size={24} />
+          </span>
+          <span className="text-xs font-bold leading-4">Fake Call</span>
+        </Link>
+
+        <Link
+          to="/mute-call"
+          className="screen-card flex min-h-28 flex-col items-center justify-center gap-2.5 px-1 text-center transition-transform hover:-translate-y-1 active:scale-95"
+        >
+          <span className="grid h-11 w-11 place-items-center rounded-[14px] bg-secondary text-gold">
+            <VolumeX size={24} />
+          </span>
+          <span className="text-xs font-bold leading-4">Mute Call</span>
+        </Link>
       </div>
 
       {/* 3-SECOND HOLD SOS BUTTON */}
@@ -1593,8 +1610,76 @@ export function SafeNet() {
   };
 
   return (
-    <Page title="InSafe Network" soft>
-      <p className="-mt-4 mb-4 text-sm text-muted-foreground">Community safety reports near your area</p>
+    <Page title="Women Safety & Helplines" soft>
+      <p className="-mt-4 mb-4 text-sm text-muted-foreground">Official 24x7 Emergency Helplines for Women in India</p>
+
+      {/* Direct One-Tap Calling Cards */}
+      <div className="grid grid-cols-2 gap-2.5 mb-6">
+        <a
+          href="tel:1091"
+          className="screen-card p-3.5 flex flex-col justify-between border-rose-200/50 dark:border-rose-900/30 hover:border-rose-500 active:scale-95 transition-all group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 group-hover:bg-rose-500/20">
+              <Phone size={18} />
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">24x7</span>
+          </div>
+          <div className="mt-3">
+            <div className="text-xs font-bold">Women in Distress</div>
+            <div className="text-base font-extrabold text-rose-600 dark:text-rose-400">Call 1091</div>
+          </div>
+        </a>
+
+        <a
+          href="tel:181"
+          className="screen-card p-3.5 flex flex-col justify-between border-purple-200/50 dark:border-purple-900/30 hover:border-purple-500 active:scale-95 transition-all group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:bg-purple-500/20">
+              <PhoneCall size={18} />
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400">Toll-Free</span>
+          </div>
+          <div className="mt-3">
+            <div className="text-xs font-bold">Women Helpline</div>
+            <div className="text-base font-extrabold text-purple-600 dark:text-purple-400">Call 181</div>
+          </div>
+        </a>
+
+        <a
+          href="tel:112"
+          className="screen-card p-3.5 flex flex-col justify-between border-blue-200/50 dark:border-blue-900/30 hover:border-blue-500 active:scale-95 transition-all group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500/20">
+              <ShieldCheck size={18} />
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">National</span>
+          </div>
+          <div className="mt-3">
+            <div className="text-xs font-bold">All Emergency</div>
+            <div className="text-base font-extrabold text-blue-600 dark:text-blue-400">Call 112</div>
+          </div>
+        </a>
+
+        <a
+          href="tel:1090"
+          className="screen-card p-3.5 flex flex-col justify-between border-amber-200/50 dark:border-amber-900/30 hover:border-amber-500 active:scale-95 transition-all group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500/20">
+              <Siren size={18} />
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">Priority</span>
+          </div>
+          <div className="mt-3">
+            <div className="text-xs font-bold">Women Power Line</div>
+            <div className="text-base font-extrabold text-amber-600 dark:text-amber-400">Call 1090</div>
+          </div>
+        </a>
+      </div>
+
       <MapVisual incidents/>
       <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
         <span>🟡 Poor lighting</span>
