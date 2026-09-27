@@ -1779,7 +1779,89 @@ function startAudioRingtone(style: string) {
     const playCycle = () => {
       if (!alive || ctx.state === 'closed') return;
       const t = ctx.currentTime;
-      if (style === 'Classic ring') {
+
+      if (style.includes('Marimba')) {
+        // Classic iPhone Marimba (2007)
+        const marimbaNotes = [
+          { f: 523.25, t: 0.00, d: 0.16 }, // C5
+          { f: 466.16, t: 0.16, d: 0.16 }, // Bb4
+          { f: 392.00, t: 0.32, d: 0.16 }, // G4
+          { f: 523.25, t: 0.48, d: 0.18 }, // C5
+          { f: 349.23, t: 0.70, d: 0.22 }, // F4
+
+          { f: 523.25, t: 1.05, d: 0.16 }, // C5
+          { f: 466.16, t: 1.21, d: 0.16 }, // Bb4
+          { f: 523.25, t: 1.37, d: 0.18 }, // C5
+          { f: 349.23, t: 1.58, d: 0.28 }, // F4
+
+          { f: 523.25, t: 2.00, d: 0.16 }, // C5
+          { f: 466.16, t: 2.16, d: 0.16 }, // Bb4
+          { f: 392.00, t: 2.32, d: 0.16 }, // G4
+          { f: 523.25, t: 2.48, d: 0.18 }, // C5
+          { f: 349.23, t: 2.70, d: 0.22 }, // F4
+
+          { f: 392.00, t: 3.02, d: 0.16 }, // G4
+          { f: 466.16, t: 3.18, d: 0.18 }, // Bb4
+          { f: 523.25, t: 3.38, d: 0.35 }, // C5
+        ];
+
+        marimbaNotes.forEach(n => {
+          // Dual-oscillator mallet strike
+          const osc1 = ctx.createOscillator();
+          const osc2 = ctx.createOscillator();
+          const gain = ctx.createGain();
+
+          osc1.type = 'triangle';
+          osc1.frequency.setValueAtTime(n.f, t + n.t);
+
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(n.f * 2, t + n.t);
+
+          gain.gain.setValueAtTime(0.24, t + n.t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + n.t + n.d);
+
+          osc1.connect(gain);
+          osc2.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc1.start(t + n.t);
+          osc2.start(t + n.t);
+          osc1.stop(t + n.t + n.d + 0.05);
+          osc2.stop(t + n.t + n.d + 0.05);
+        });
+      } else if (style.includes('Reflection')) {
+        // iOS 17 Apple Reflection
+        const reflectionNotes = [
+          { f: 739.99, t: 0.00 }, // F#5
+          { f: 880.00, t: 0.18 }, // A5
+          { f: 1108.73, t: 0.36 }, // C#6
+          { f: 1318.51, t: 0.54 }, // E6
+          { f: 1108.73, t: 0.74 }, // C#6
+          { f: 880.00, t: 0.94 }, // A5
+          { f: 739.99, t: 1.14 }, // F#5
+
+          { f: 659.25, t: 1.50 }, // E5
+          { f: 830.61, t: 1.68 }, // G#5
+          { f: 987.77, t: 1.86 }, // B5
+          { f: 1318.51, t: 2.04 }, // E6
+          { f: 987.77, t: 2.24 }, // B5
+          { f: 830.61, t: 2.44 }, // G#5
+        ];
+
+        reflectionNotes.forEach(n => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(n.f, t + n.t);
+          gain.gain.setValueAtTime(0.22, t + n.t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + n.t + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t + n.t);
+          osc.stop(t + n.t + 0.38);
+        });
+      } else if (style.includes('Classic')) {
+        // Dual-tone bell
         [440, 480].forEach(freq => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -1795,37 +1877,65 @@ function startAudioRingtone(style: string) {
           osc.start(t);
           osc.stop(t + 1.1);
         });
-      } else if (style === 'Gentle chime') {
-        [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50].forEach((freq, i) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, t + i * 0.14);
-          gain.gain.setValueAtTime(0.22, t + i * 0.14);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.14 + 0.38);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(t + i * 0.14);
-          osc.stop(t + i * 0.14 + 0.42);
-        });
       } else {
-        [587.33, 880].forEach((freq, i) => {
-          const osc = ctx.createOscillator();
+        // Default: Iconic Apple iPhone "Opening" Ringtone
+        const openingNotes = [
+          { f: 587.33, t: 0.00, d: 0.17 }, // D5
+          { f: 739.99, t: 0.18, d: 0.17 }, // F#5
+          { f: 880.00, t: 0.36, d: 0.17 }, // A5
+          { f: 1174.66, t: 0.54, d: 0.22 }, // D6
+          { f: 880.00, t: 0.76, d: 0.17 }, // A5
+          { f: 739.99, t: 0.94, d: 0.17 }, // F#5
+
+          { f: 493.88, t: 1.16, d: 0.17 }, // B4
+          { f: 587.33, t: 1.34, d: 0.17 }, // D5
+          { f: 783.99, t: 1.52, d: 0.17 }, // G5
+          { f: 987.77, t: 1.70, d: 0.22 }, // B5
+          { f: 783.99, t: 1.92, d: 0.17 }, // G5
+          { f: 587.33, t: 2.10, d: 0.17 }, // D5
+
+          { f: 440.00, t: 2.32, d: 0.17 }, // A4
+          { f: 554.37, t: 2.50, d: 0.17 }, // C#5
+          { f: 659.25, t: 2.68, d: 0.17 }, // E5
+          { f: 880.00, t: 2.86, d: 0.22 }, // A5
+          { f: 659.25, t: 3.08, d: 0.17 }, // E5
+          { f: 554.37, t: 3.26, d: 0.17 }, // C#5
+
+          { f: 587.33, t: 3.48, d: 0.18 }, // D5
+          { f: 739.99, t: 3.68, d: 0.18 }, // F#5
+          { f: 880.00, t: 3.88, d: 0.18 }, // A5
+          { f: 1174.66, t: 4.08, d: 0.40 }  // D6
+        ];
+
+        openingNotes.forEach(n => {
+          const osc1 = ctx.createOscillator();
+          const osc2 = ctx.createOscillator();
           const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(freq, t + i * 0.2);
-          gain.gain.setValueAtTime(0.24, t + i * 0.2);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.2 + 0.55);
-          osc.connect(gain);
+
+          // Authentic bright bell chime harmonics
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(n.f, t + n.t);
+
+          osc2.type = 'triangle';
+          osc2.frequency.setValueAtTime(n.f * 2, t + n.t);
+
+          gain.gain.setValueAtTime(0.24, t + n.t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + n.t + n.d);
+
+          osc1.connect(gain);
+          osc2.connect(gain);
           gain.connect(ctx.destination);
-          osc.start(t + i * 0.2);
-          osc.stop(t + i * 0.2 + 0.6);
+
+          osc1.start(t + n.t);
+          osc2.start(t + n.t);
+          osc1.stop(t + n.t + n.d + 0.05);
+          osc2.stop(t + n.t + n.d + 0.05);
         });
       }
     };
 
     playCycle();
-    const interval = setInterval(playCycle, 2700);
+    const interval = setInterval(playCycle, style.includes('Marimba') ? 3800 : 4700);
 
     return () => {
       alive = false;
@@ -1841,7 +1951,9 @@ function startAudioRingtone(style: string) {
 export function FakeCall() {
   const [name, setName] = useState('Mom');
   const [phoneNumber, setPhoneNumber] = useState('+91 98201 45892');
-  const [ringtone, setRingtone] = useState('Gentle chime');
+  const [ringtone, setRingtone] = useState('Apple Opening (iPhone Default)');
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const previewStopRef = useRef<(() => void) | null>(null);
   const [delay, setDelay] = useState(0);
   const [script, setScript] = useState('Hey beta, where are you? I am waiting downstairs in the car, please come outside quickly.');
 
@@ -2032,14 +2144,39 @@ export function FakeCall() {
 
         <Field label="Caller Number / Display Subtitle" value={phoneNumber} onChange={setPhoneNumber} />
 
-        <label className="block">
-          <span className="field-label">Ringtone Sound</span>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="field-label mb-0">Ringtone Sound</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (isPlayingPreview) {
+                  if (previewStopRef.current) previewStopRef.current();
+                  previewStopRef.current = null;
+                  setIsPlayingPreview(false);
+                } else {
+                  setIsPlayingPreview(true);
+                  const stop = startAudioRingtone(ringtone);
+                  previewStopRef.current = stop;
+                  setTimeout(() => {
+                    if (previewStopRef.current) previewStopRef.current();
+                    previewStopRef.current = null;
+                    setIsPlayingPreview(false);
+                  }, 4600);
+                }
+              }}
+              className="text-[11px] font-bold text-brand hover:underline flex items-center gap-1"
+            >
+              <span>{isPlayingPreview ? '⏹ Stop Sound' : '▶ Test Apple Ringtone'}</span>
+            </button>
+          </div>
           <select className="field" value={ringtone} onChange={e => setRingtone(e.target.value)}>
-            <option>Gentle chime (Modern phone)</option>
-            <option>Classic ring (Dual-tone bell)</option>
-            <option>Soft pulse (Discreet ring)</option>
+            <option>Apple Opening (iPhone Default)</option>
+            <option>Apple Marimba (Classic iPhone)</option>
+            <option>Apple Reflection (iOS 17)</option>
+            <option>Classic Phone Bell</option>
           </select>
-        </label>
+        </div>
 
         <label className="block">
           <span className="field-label">Trigger Delay · {delay === 0 ? 'Instant (0s)' : `${delay} seconds`}</span>
