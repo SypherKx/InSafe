@@ -105,19 +105,91 @@ function Field({ label, value, onChange, type = 'text', placeholder, required = 
   );
 }
 
+function GpsCrosshairIcon({ size = 16, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="7" />
+      <line x1="12" y1="2" x2="12" y2="6" />
+      <line x1="12" y1="18" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="6" y2="12" />
+      <line x1="18" y1="12" x2="22" y2="12" />
+      <circle cx="12" cy="12" r="2.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 function MapVisual({ incidents = false }: { incidents?: boolean }) {
-  const { state } = useApp();
+  const { state, update, notify } = useApp();
+  const [locating, setLocating] = useState(false);
+  const [zoomDelta, setZoomDelta] = useState(0.012);
+  const [detectedAddress, setDetectedAddress] = useState('Connaught Place, New Delhi');
+
   const lat = state.currentLocation?.lat || 28.6315;
   const lng = state.currentLocation?.lng || 77.2167;
+
+  const handleLocateMe = () => {
+    if (typeof window === 'undefined') return;
+    setLocating(true);
+
+    if (!navigator.geolocation) {
+      notify('Geolocation is not supported by your browser.');
+      setLocating(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const newLat = pos.coords.latitude;
+        const newLng = pos.coords.longitude;
+
+        update({
+          currentLocation: { lat: newLat, lng: newLng },
+          locationPermission: true,
+        });
+
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${newLat}&lon=${newLng}`, {
+            headers: { 'Accept': 'application/json' },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const road = data.address?.suburb || data.address?.neighbourhood || data.address?.road || data.address?.city_district;
+            const city = data.address?.city || data.address?.town || data.address?.state_district || 'India';
+            const place = road ? `${road}, ${city}` : `${city}, India`;
+            setDetectedAddress(place);
+            notify(`📍 Located: ${place}`);
+          } else {
+            setDetectedAddress(`${newLat.toFixed(4)}° N, ${newLng.toFixed(4)}° E`);
+            notify(`📍 Live Location: ${newLat.toFixed(4)}° N, ${newLng.toFixed(4)}° E`);
+          }
+        } catch {
+          setDetectedAddress(`${newLat.toFixed(4)}° N, ${newLng.toFixed(4)}° E`);
+          notify(`📍 Live GPS: ${newLat.toFixed(4)}° N, ${newLng.toFixed(4)}° E`);
+        }
+
+        setLocating(false);
+      },
+      (err) => {
+        console.warn('Geolocation error:', err);
+        notify('📍 Using current location coordinates.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  const zoomIn = () => setZoomDelta(z => Math.max(0.004, z * 0.6));
+  const zoomOut = () => setZoomDelta(z => Math.min(0.045, z * 1.5));
 
   return (
     <div
       className={`relative overflow-hidden rounded-[22px] ${incidents ? 'h-[390px]' : 'h-[330px]'}`}
       style={{ border: '1px solid rgba(226, 232, 240, 0.8)', background: '#FFFFFF' }}
     >
+      {/* Live OpenStreetMap iframe */}
       <iframe
         title="Live Safety Map"
-        src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.015},${lat-0.01},${lng+0.015},${lat+0.01}&layer=mapnik`}
+        src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng-zoomDelta*1.3},${lat-zoomDelta},${lng+zoomDelta*1.3},${lat+zoomDelta}&layer=mapnik`}
         style={{
           width: '100%',
           height: '100%',
@@ -127,6 +199,39 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
         loading="lazy"
       />
 
+      {/* Floating Locate Me Button */}
+      <button
+        type="button"
+        onClick={handleLocateMe}
+        disabled={locating}
+        title="Locate my real-time position"
+        className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/95 text-foreground shadow-md border border-border text-xs font-bold hover:bg-card active:scale-95 transition-all backdrop-blur-sm"
+      >
+        <GpsCrosshairIcon size={15} className={locating ? 'animate-spin text-brand' : 'text-brand'} />
+        <span>{locating ? 'Locating...' : 'Locate Me'}</span>
+      </button>
+
+      {/* Floating Zoom Controls */}
+      <div className="absolute top-12 right-3 z-20 flex flex-col gap-1.5 mt-1">
+        <button
+          type="button"
+          onClick={zoomIn}
+          title="Zoom in"
+          className="w-8 h-8 rounded-xl bg-card/95 text-foreground shadow-md border border-border flex items-center justify-center font-bold text-sm hover:bg-card active:scale-95 transition-all backdrop-blur-sm"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          onClick={zoomOut}
+          title="Zoom out"
+          className="w-8 h-8 rounded-xl bg-card/95 text-foreground shadow-md border border-border flex items-center justify-center font-bold text-sm hover:bg-card active:scale-95 transition-all backdrop-blur-sm"
+        >
+          −
+        </button>
+      </div>
+
+      {/* Geofence Ring Overlay */}
       <div style={{
         position: 'absolute',
         top: '50%',
@@ -141,6 +246,7 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
         boxShadow: '0 0 20px rgba(0, 186, 85, 0.15)',
       }} />
 
+      {/* InSafe Custom Location Pin Marker */}
       <div style={{
         position: 'absolute',
         top: '50%',
@@ -180,9 +286,9 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
           <span className="absolute bottom-[22%] left-[45%] grid h-10 w-10 place-items-center rounded-full bg-blue text-primary-foreground shadow-lg"><MapPin size={20}/></span>
         </>
       ) : (
-        <div className="absolute bottom-4 left-4 rounded-full bg-card/95 px-3 py-2 text-xs font-semibold shadow-sm flex items-center border border-border">
+        <div className="absolute bottom-3 left-3 z-10 rounded-full bg-card/95 px-3 py-1.5 text-xs font-semibold shadow-md flex items-center border border-border backdrop-blur-sm">
           <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-brand animate-pulse" />
-          Your safe geofence active
+          <span className="truncate max-w-[210px]">{detectedAddress}</span>
         </div>
       )}
     </div>
@@ -770,7 +876,7 @@ export function Dashboard() {
           <div className="min-w-0">
             <p className="truncate text-[16px] font-bold text-foreground">Hello {displayName},</p>
             <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-              <MapPin size={12} className="shrink-0 text-brand"/> Connaught Place, New Delhi, India
+              <MapPin size={12} className="shrink-0 text-brand"/> {state.currentLocation ? `${state.currentLocation.lat.toFixed(4)}° N, ${state.currentLocation.lng.toFixed(4)}° E · Live GPS` : 'Connaught Place, New Delhi, India'}
             </p>
           </div>
         </div>
