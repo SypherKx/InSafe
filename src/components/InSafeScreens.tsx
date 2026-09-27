@@ -141,392 +141,104 @@ function GpsCrosshairIcon({ size = 16, className = '' }: { size?: number; classN
 
 function MapVisual({ incidents = false }: { incidents?: boolean }) {
   const { state, update, notify } = useApp();
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
-  const circleRef = useRef<any>(null);
-  const userPinnedRef = useRef(false);
-
   const [locating, setLocating] = useState(false);
-  const [detectedAddress, setDetectedAddress] = useState('Locating your position...');
-  const [accuracyMeters, setAccuracyMeters] = useState<number | null>(null);
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [isCustomPinned, setIsCustomPinned] = useState(false);
+  const [zoomDelta, setZoomDelta] = useState(0.012);
+  const [detectedAddress, setDetectedAddress] = useState('Connaught Place, New Delhi');
 
-  const initialLat = state.currentLocation?.lat || 26.4652;
-  const initialLng = state.currentLocation?.lng || 80.3498;
+  const lat = state.currentLocation?.lat || 28.6315;
+  const lng = state.currentLocation?.lng || 77.2167;
 
-  const reverseGeocode = async (latitude: number, longitude: number, acc?: number) => {
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`, {
-        headers: { 'Accept': 'application/json' },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const a = data.address || {};
-        const road = a.road || a.pedestrian || a.suburb || a.neighbourhood || a.residential;
-        const city = a.city || a.town || a.county || a.state_district || a.state || 'Kanpur';
-        const display = road ? `${road}, ${city}` : `${city}, India`;
-        setDetectedAddress(display);
-        return display;
-      }
-    } catch {}
-    const fallback = `${latitude.toFixed(5)}° N, ${longitude.toFixed(5)}° E`;
-    setDetectedAddress(fallback);
-    return fallback;
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-    let watchId: number | null = null;
-
-    async function setupMap() {
-      if (!mapContainerRef.current) return;
-      const L = (await import('leaflet')).default;
-      if (!isMounted || !mapContainerRef.current) return;
-
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-
-      const curLat = state.currentLocation?.lat || 26.4652;
-      const curLng = state.currentLocation?.lng || 80.3498;
-
-      const map = L.map(mapContainerRef.current, {
-        center: [curLat, curLng],
-        zoom: 16,
-        zoomControl: false,
-        attributionControl: false,
-      });
-      mapInstanceRef.current = map;
-
-      // Fast, high-clarity OpenStreetMap tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap contributors',
-      }).addTo(map);
-
-      // Force recalculate dimensions once rendered
-      setTimeout(() => {
-        if (isMounted && mapInstanceRef.current) {
-          mapInstanceRef.current.invalidateSize();
-        }
-      }, 200);
-
-      // Custom Glowing InSafe Safety Pin Icon
-      const pinIcon = L.divIcon({
-        className: 'insafe-leaflet-pin',
-        html: `
-          <div style="position:relative; width:44px; height:54px; margin-left:-22px; margin-top:-52px; filter: drop-shadow(0 6px 14px rgba(0,0,0,0.35)); cursor:grab;">
-            <svg width="44" height="54" viewBox="0 0 42 52" fill="none">
-              <path d="M21 0C9.4 0 0 9.4 0 21c0 15.5 21 31 21 31s21-15.5 21-31C42 9.4 32.6 0 21 0z" fill="#00BA55"/>
-              <path d="M21 2C10.5 2 2 10.5 2 21c0 3.2 0.8 6.2 2.2 8.8h33.6C39.2 27.2 40 24.2 40 21 40 10.5 31.5 2 21 2z" fill="#F59E0B"/>
-              <circle cx="21" cy="20" r="11" fill="white"/>
-              <path d="M21 13L14 16v5c0 4.3 3 8.3 7 9.3 4-1 7-5 7-9.3v-5l-7-3z" fill="#00BA55"/>
-              <circle cx="21" cy="20" r="2.5" fill="white"/>
-            </svg>
-          </div>
-        `,
-        iconSize: [44, 54],
-        iconAnchor: [22, 52],
-      });
-
-      // Draggable marker
-      const marker = L.marker([curLat, curLng], {
-        icon: pinIcon,
-        draggable: true,
-        title: 'Drag to adjust exact location',
-      }).addTo(map);
-      markerRef.current = marker;
-
-      // Accuracy & Geofence Circle
-      const circle = L.circle([curLat, curLng], {
-        radius: 35,
-        color: '#00BA55',
-        fillColor: '#00BA55',
-        fillOpacity: 0.12,
-        weight: 2,
-        dashArray: '4, 6',
-      }).addTo(map);
-      circleRef.current = circle;
-
-      // Incidents markers if in SafeNet screen
-      if (incidents) {
-        const hazardIcon = L.divIcon({
-          className: 'hazard-pin',
-          html: `<div style="background:#EF4444; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:14px; box-shadow:0 3px 8px rgba(239,68,68,0.5); border:2px solid white;">⚠️</div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
-        });
-        const warningIcon = L.divIcon({
-          className: 'warning-pin',
-          html: `<div style="background:#F59E0B; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:14px; box-shadow:0 3px 8px rgba(245,158,11,0.5); border:2px solid white;">🔔</div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
-        });
-        const safeIcon = L.divIcon({
-          className: 'safe-pin',
-          html: `<div style="background:#2563EB; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:14px; box-shadow:0 3px 8px rgba(37,99,235,0.5); border:2px solid white;">🛡️</div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
-        });
-
-        L.marker([curLat + 0.0025, curLng - 0.003], { icon: hazardIcon }).addTo(map);
-        L.marker([curLat - 0.002, curLng + 0.0035], { icon: warningIcon }).addTo(map);
-        L.marker([curLat + 0.0018, curLng + 0.0025], { icon: safeIcon }).addTo(map);
-      }
-
-      // Drag End Event: Updates exact location
-      marker.on('dragend', async (e: any) => {
-        userPinnedRef.current = true;
-        setIsCustomPinned(true);
-        const pos = e.target.getLatLng();
-        circle.setLatLng(pos);
-        update({ currentLocation: { lat: pos.lat, lng: pos.lng }, locationPermission: true });
-        const addr = await reverseGeocode(pos.lat, pos.lng);
-        notify(`📍 Exact location set: ${addr}`);
-      });
-
-      // Map Click Event: Taps anywhere to move exact pin
-      map.on('click', async (e: any) => {
-        userPinnedRef.current = true;
-        setIsCustomPinned(true);
-        marker.setLatLng(e.latlng);
-        circle.setLatLng(e.latlng);
-        update({ currentLocation: { lat: e.latlng.lat, lng: e.latlng.lng }, locationPermission: true });
-        const addr = await reverseGeocode(e.latlng.lat, e.latlng.lng);
-        notify(`📍 Pinned to: ${addr}`);
-      });
-
-      // Continuous high-precision hardware GPS watch
-      if (typeof window !== 'undefined' && navigator.geolocation) {
-        watchId = navigator.geolocation.watchPosition(
-          async (pos) => {
-            if (!isMounted) return;
-            const newLat = pos.coords.latitude;
-            const newLng = pos.coords.longitude;
-            const acc = Math.round(pos.coords.accuracy);
-            setAccuracyMeters(acc);
-
-            if (circleRef.current) {
-              circleRef.current.setRadius(Math.max(15, acc));
-            }
-
-            // If user hasn't manually pinned a spot, lock marker to live GPS
-            if (!userPinnedRef.current && markerRef.current && mapInstanceRef.current) {
-              markerRef.current.setLatLng([newLat, newLng]);
-              circleRef.current?.setLatLng([newLat, newLng]);
-              mapInstanceRef.current.panTo([newLat, newLng]);
-              update({ currentLocation: { lat: newLat, lng: newLng }, locationPermission: true });
-              reverseGeocode(newLat, newLng, acc);
-            }
-          },
-          () => {},
-          { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
-        );
-      }
-
-      // Initial reverse geocode
-      reverseGeocode(curLat, curLng);
-    }
-
-    setupMap();
-
-    return () => {
-      isMounted = false;
-      if (watchId !== null && typeof window !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, [incidents]);
-
-  const handleLocateMe = (silent = false) => {
+  const handleLocateMe = () => {
     if (typeof window === 'undefined') return;
     setLocating(true);
-    userPinnedRef.current = false;
-    setIsCustomPinned(false);
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const newLat = pos.coords.latitude;
-          const newLng = pos.coords.longitude;
-          const acc = Math.round(pos.coords.accuracy);
-          setAccuracyMeters(acc);
-
-          if (markerRef.current) markerRef.current.setLatLng([newLat, newLng]);
-          if (circleRef.current) {
-            circleRef.current.setLatLng([newLat, newLng]);
-            circleRef.current.setRadius(Math.max(15, acc));
-          }
-          if (mapInstanceRef.current) {
-            mapInstanceRef.current.flyTo([newLat, newLng], 17, { duration: 1.2 });
-          }
-
-          update({
-            currentLocation: { lat: newLat, lng: newLng },
-            locationPermission: true,
-          });
-
-          const place = await reverseGeocode(newLat, newLng, acc);
-          if (!silent) {
-            notify(`📍 Live GPS Locked: ${place} (±${acc}m)`);
-          }
-          setLocating(false);
-        },
-        async () => {
-          // Dynamic real network IP fallback
-          try {
-            const res = await fetch('https://ipwho.is/');
-            const data = await res.json();
-            if (data && data.success && data.latitude && data.longitude) {
-              const ipLat = data.latitude;
-              const ipLng = data.longitude;
-
-              if (markerRef.current) markerRef.current.setLatLng([ipLat, ipLng]);
-              if (circleRef.current) {
-                circleRef.current.setLatLng([ipLat, ipLng]);
-                circleRef.current.setRadius(35);
-              }
-              if (mapInstanceRef.current) {
-                mapInstanceRef.current.flyTo([ipLat, ipLng], 15, { duration: 1.2 });
-              }
-
-              update({
-                currentLocation: { lat: ipLat, lng: ipLng },
-                locationPermission: true,
-              });
-
-              const cityLoc = `${data.city || 'Kanpur'}, ${data.region || 'Uttar Pradesh'}`;
-              setDetectedAddress(cityLoc);
-              if (!silent) {
-                notify(`📍 Located via Network: ${cityLoc}`);
-              }
-            }
-          } catch {}
-          setLocating(false);
-        },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-      );
-    } else {
+    if (!navigator.geolocation) {
+      notify('Geolocation is not supported by your browser.');
       setLocating(false);
+      return;
     }
-  };
 
-  const handleSearchSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-    setSearchLoading(true);
-
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery.trim())}&limit=1`,
-        { headers: { 'Accept': 'application/json' } }
-      );
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const targetLat = parseFloat(data[0].lat);
-        const targetLng = parseFloat(data[0].lon);
-        userPinnedRef.current = true;
-        setIsCustomPinned(true);
-
-        if (markerRef.current) markerRef.current.setLatLng([targetLat, targetLng]);
-        if (circleRef.current) {
-          circleRef.current.setLatLng([targetLat, targetLng]);
-          circleRef.current.setRadius(25);
-        }
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.flyTo([targetLat, targetLng], 17, { duration: 1.2 });
-        }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const newLat = pos.coords.latitude;
+        const newLng = pos.coords.longitude;
 
         update({
-          currentLocation: { lat: targetLat, lng: targetLng },
+          currentLocation: { lat: newLat, lng: newLng },
           locationPermission: true,
         });
 
-        const shortName = data[0].display_name.split(',').slice(0, 3).join(',');
-        setDetectedAddress(shortName);
-        setShowSearch(false);
-        setSearchQuery('');
-        notify(`📍 Map centered on ${shortName.split(',')[0]}`);
-      } else {
-        notify('Location not found. Try adding colony or city name.');
-      }
-    } catch {
-      notify('Could not search location.');
-    } finally {
-      setSearchLoading(false);
-    }
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${newLat}&lon=${newLng}`, {
+            headers: { 'Accept': 'application/json' },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const road = data.address?.suburb || data.address?.neighbourhood || data.address?.road || data.address?.city_district;
+            const city = data.address?.city || data.address?.town || data.address?.state_district || 'India';
+            const place = road ? `${road}, ${city}` : `${city}, India`;
+            setDetectedAddress(place);
+            notify(`📍 Located: ${place}`);
+          } else {
+            setDetectedAddress(`${newLat.toFixed(4)}° N, ${newLng.toFixed(4)}° E`);
+            notify(`📍 Live Location: ${newLat.toFixed(4)}° N, ${newLng.toFixed(4)}° E`);
+          }
+        } catch {
+          setDetectedAddress(`${newLat.toFixed(4)}° N, ${newLng.toFixed(4)}° E`);
+          notify(`📍 Live GPS: ${newLat.toFixed(4)}° N, ${newLng.toFixed(4)}° E`);
+        }
+
+        setLocating(false);
+      },
+      (err) => {
+        console.warn('Geolocation error:', err);
+        notify('📍 Using current location coordinates.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
   };
 
-  const zoomIn = () => mapInstanceRef.current?.zoomIn();
-  const zoomOut = () => mapInstanceRef.current?.zoomOut();
+  const zoomIn = () => setZoomDelta(z => Math.max(0.004, z * 0.6));
+  const zoomOut = () => setZoomDelta(z => Math.min(0.045, z * 1.5));
 
   return (
     <div
       className={`relative overflow-hidden rounded-[22px] ${incidents ? 'h-[390px]' : 'h-[330px]'}`}
-      style={{ border: '1px solid rgba(226, 232, 240, 0.8)', background: '#F8FAFC' }}
+      style={{ border: '1px solid rgba(226, 232, 240, 0.8)', background: '#FFFFFF' }}
     >
-      {/* Real Interactive Leaflet Map Canvas */}
-      <div ref={mapContainerRef} className="w-full h-full" style={{ zIndex: 1 }} />
+      {/* Live OpenStreetMap iframe */}
+      <iframe
+        title="Live Safety Map"
+        src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng-zoomDelta*1.3},${lat-zoomDelta},${lng+zoomDelta*1.3},${lat+zoomDelta}&layer=mapnik`}
+        style={{
+          width: '100%',
+          height: '100%',
+          border: 'none',
+          filter: 'contrast(1.02) saturate(1.05)',
+        }}
+        loading="lazy"
+      />
 
-      {/* Floating Action Controls */}
-      <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => setShowSearch(!showSearch)}
-          title="Search colony, street, or landmark"
-          className="h-8 px-2.5 rounded-full bg-card/95 text-foreground shadow-md border border-border text-xs font-bold hover:bg-card active:scale-95 transition-all backdrop-blur-sm flex items-center gap-1 cursor-pointer"
-        >
-          🔍 <span>Search</span>
-        </button>
+      {/* Floating Locate Me Button */}
+      <button
+        type="button"
+        onClick={handleLocateMe}
+        disabled={locating}
+        title="Locate my real-time position"
+        className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/95 text-foreground shadow-md border border-border text-xs font-bold hover:bg-card active:scale-95 transition-all backdrop-blur-sm"
+      >
+        <GpsCrosshairIcon size={15} className={locating ? 'animate-spin text-brand' : 'text-brand'} />
+        <span>{locating ? 'Locating...' : 'Locate Me'}</span>
+      </button>
 
-        <button
-          type="button"
-          onClick={() => handleLocateMe(false)}
-          disabled={locating}
-          title="Locate my exact live position"
-          className="h-8 px-3 rounded-full bg-card/95 text-foreground shadow-md border border-border text-xs font-bold hover:bg-card active:scale-95 transition-all backdrop-blur-sm flex items-center gap-1.5 cursor-pointer"
-        >
-          <GpsCrosshairIcon size={14} className={locating ? 'animate-spin text-brand' : 'text-brand'} />
-          <span>{locating ? 'Locating...' : 'Locate Me'}</span>
-        </button>
-      </div>
-
-      {/* Quick Search Popover */}
-      {showSearch && (
-        <form onSubmit={handleSearchSubmit} className="absolute top-12 left-3 right-3 z-30 flex gap-1.5 bg-card/95 p-1.5 rounded-2xl shadow-xl border border-border backdrop-blur-md animate-fade-in">
-          <input
-            className="flex-1 h-8 px-3 text-xs bg-muted rounded-xl outline-none"
-            placeholder="Search colony, street, or landmark in Kanpur/India..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            autoFocus
-          />
-          <button
-            type="submit"
-            disabled={searchLoading}
-            className="h-8 px-3 rounded-xl bg-brand text-white text-xs font-bold hover:bg-brand/90 cursor-pointer"
-          >
-            {searchLoading ? '...' : 'Go'}
-          </button>
-        </form>
-      )}
-
-      {/* Floating Zoom & Recenter Controls */}
+      {/* Floating Zoom Controls */}
       <div className="absolute top-12 right-3 z-20 flex flex-col gap-1.5 mt-1">
         <button
           type="button"
           onClick={zoomIn}
           title="Zoom in"
-          className="w-8 h-8 rounded-xl bg-card/95 text-foreground shadow-md border border-border flex items-center justify-center font-bold text-sm hover:bg-card active:scale-95 transition-all backdrop-blur-sm cursor-pointer"
+          className="w-8 h-8 rounded-xl bg-card/95 text-foreground shadow-md border border-border flex items-center justify-center font-bold text-sm hover:bg-card active:scale-95 transition-all backdrop-blur-sm"
         >
           +
         </button>
@@ -534,51 +246,76 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
           type="button"
           onClick={zoomOut}
           title="Zoom out"
-          className="w-8 h-8 rounded-xl bg-card/95 text-foreground shadow-md border border-border flex items-center justify-center font-bold text-sm hover:bg-card active:scale-95 transition-all backdrop-blur-sm cursor-pointer"
+          className="w-8 h-8 rounded-xl bg-card/95 text-foreground shadow-md border border-border flex items-center justify-center font-bold text-sm hover:bg-card active:scale-95 transition-all backdrop-blur-sm"
         >
           −
         </button>
       </div>
 
-      {/* Top Left Helper Hint */}
-      <div className="absolute top-3 left-3 z-20 pointer-events-none">
-        <span className="px-2.5 py-1 rounded-full bg-card/90 text-foreground/80 shadow-sm border border-border/80 text-[10px] font-medium backdrop-blur-sm flex items-center gap-1">
-          📍 Drag pin or tap to adjust exact gate
-        </span>
+      {/* Geofence Ring Overlay */}
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 190,
+        height: 190,
+        borderRadius: '50%',
+        border: '2px solid rgba(0, 186, 85, 0.85)',
+        background: 'rgba(0, 186, 85, 0.08)',
+        pointerEvents: 'none',
+        boxShadow: '0 0 20px rgba(0, 186, 85, 0.15)',
+      }} />
+
+      {/* InSafe Custom Location Pin Marker */}
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -60%)',
+        pointerEvents: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}>
+        <div style={{ filter: 'drop-shadow(0 6px 12px rgba(0, 0, 0, 0.25))' }}>
+          <svg width="42" height="52" viewBox="0 0 42 52" fill="none">
+            <path d="M21 0C9.4 0 0 9.4 0 21c0 15.5 21 31 21 31s21-15.5 21-31C42 9.4 32.6 0 21 0z" fill="#00BA55"/>
+            <path d="M21 2C10.5 2 2 10.5 2 21c0 3.2 0.8 6.2 2.2 8.8h33.6C39.2 27.2 40 24.2 40 21 40 10.5 31.5 2 21 2z" fill="#F59E0B"/>
+            <circle cx="21" cy="20" r="11" fill="white"/>
+            <path d="M21 13L14 16v5c0 4.3 3 8.3 7 9.3 4-1 7-5 7-9.3v-5l-7-3z" fill="#00BA55"/>
+            <circle cx="21" cy="20" r="2.5" fill="white"/>
+          </svg>
+        </div>
+
+        <div style={{
+          width: 58,
+          height: 18,
+          borderRadius: '50%',
+          background: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(4px)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+          marginTop: -8,
+          zIndex: -1,
+        }} />
       </div>
 
-      {/* Bottom Floating Live Address Card */}
-      <div className="absolute bottom-3 left-3 z-20 rounded-2xl bg-card/95 px-3 py-1.5 text-xs font-semibold shadow-md border border-border backdrop-blur-sm max-w-[300px]">
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand animate-pulse shrink-0" />
-          <span className="truncate">{detectedAddress}</span>
+      {incidents ? (
+        <>
+          <span className="absolute left-[32%] top-[31%] grid h-10 w-10 place-items-center rounded-full bg-gold text-foreground shadow-lg"><Bell size={20}/></span>
+          <span className="absolute right-[26%] top-[51%] grid h-10 w-10 place-items-center rounded-full bg-destructive text-primary-foreground shadow-lg"><Siren size={20}/></span>
+          <span className="absolute bottom-[22%] left-[45%] grid h-10 w-10 place-items-center rounded-full bg-blue text-primary-foreground shadow-lg"><MapPin size={20}/></span>
+        </>
+      ) : (
+        <div className="absolute bottom-3 left-3 z-10 rounded-full bg-card/95 px-3 py-1.5 text-xs font-semibold shadow-md flex items-center border border-border backdrop-blur-sm">
+          <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-brand animate-pulse" />
+          <span className="truncate max-w-[210px]">{detectedAddress}</span>
         </div>
-        <div className="flex items-center gap-2 pl-3.5 mt-0.5 text-[10px] text-muted-foreground">
-          {accuracyMeters ? (
-            <span className="text-brand font-medium">±{accuracyMeters}m Accuracy</span>
-          ) : (
-            <span>GPS Tracking Active</span>
-          )}
-          {isCustomPinned && (
-            <span className="bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-medium">Custom Pin</span>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom Right Re-center GPS button if custom pinned */}
-      {isCustomPinned && (
-        <button
-          type="button"
-          onClick={() => handleLocateMe(false)}
-          title="Return to real-time live GPS tracking"
-          className="absolute bottom-3 right-3 z-20 h-7 px-2.5 rounded-full bg-brand text-white shadow-md text-[11px] font-bold hover:bg-brand/90 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
-        >
-          🔄 <span>Live GPS</span>
-        </button>
       )}
     </div>
   );
 }
+
 
 
 // 1. SPLASH SCREEN (Enters directly into Setup/Dashboard)
