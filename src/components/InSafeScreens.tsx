@@ -1949,13 +1949,14 @@ function startAudioRingtone(style: string) {
 
 // 9. FAKE CALL (Hyper-Realistic Incoming & In-Call Experience)
 export function FakeCall() {
-  const [name, setName] = useState('Mom');
+  const [name, setName] = useState('Maa ❤️');
   const [phoneNumber, setPhoneNumber] = useState('+91 98201 45892');
   const [ringtone, setRingtone] = useState('Apple Opening (iPhone Default)');
+  const [voiceClip, setVoiceClip] = useState('/audio/mom_call.mp3');
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
-  const previewStopRef = useRef<(() => void) | null>(null);
+  const [isPlayingVoicePreview, setIsPlayingVoicePreview] = useState(false);
   const [delay, setDelay] = useState(0);
-  const [script, setScript] = useState('Hey beta, where are you? I am waiting downstairs in the car, please come outside quickly.');
+  const [script, setScript] = useState('हाँ बेटा, कहाँ हो तुम? मैं नीचे गाड़ी में वेट कर रही हूँ, जल्दी बाहर आ जाओ, लेट हो रहा है।');
 
   const [active, setActive] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -1969,6 +1970,9 @@ export function FakeCall() {
 
   const ringtoneStopRef = useRef<(() => void) | null>(null);
   const vibrationIntervalRef = useRef<any>(null);
+  const previewStopRef = useRef<(() => void) | null>(null);
+  const callAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewVoiceAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Stop ringtone and vibration safely
   const stopRinging = () => {
@@ -2033,13 +2037,29 @@ export function FakeCall() {
   useEffect(() => {
     return () => {
       stopRinging();
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+      if (callAudioRef.current) {
+        callAudioRef.current.pause();
+        callAudioRef.current = null;
+      }
+      if (previewVoiceAudioRef.current) {
+        previewVoiceAudioRef.current.pause();
+        previewVoiceAudioRef.current = null;
       }
     };
   }, []);
 
   const handleStartCall = () => {
+    if (previewVoiceAudioRef.current) {
+      previewVoiceAudioRef.current.pause();
+      previewVoiceAudioRef.current = null;
+      setIsPlayingVoicePreview(false);
+    }
+    if (previewStopRef.current) {
+      previewStopRef.current();
+      previewStopRef.current = null;
+      setIsPlayingPreview(false);
+    }
+
     if (delay > 0) {
       setCountdown(delay);
     } else {
@@ -2058,22 +2078,33 @@ export function FakeCall() {
     setAnswered(true);
     setCallDuration(0);
 
-    // Realistic speech playback through phone speaker
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(script);
-        utterance.rate = 0.95;
-        utterance.pitch = 1.05;
-        window.speechSynthesis.speak(utterance);
-      } catch {}
+    // Play REAL human caller audio recording
+    if (callAudioRef.current) {
+      callAudioRef.current.pause();
+      callAudioRef.current = null;
+    }
+
+    try {
+      const audio = new Audio(voiceClip);
+      audio.volume = 1.0;
+      audio.play().catch(e => console.warn('Audio play:', e));
+      callAudioRef.current = audio;
+    } catch (e) {
+      console.warn('Audio play error:', e);
     }
   };
 
   const handleEndCall = () => {
     stopRinging();
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    if (callAudioRef.current) {
+      callAudioRef.current.pause();
+      callAudioRef.current.currentTime = 0;
+      callAudioRef.current = null;
+    }
+    if (previewVoiceAudioRef.current) {
+      previewVoiceAudioRef.current.pause();
+      previewVoiceAudioRef.current = null;
+      setIsPlayingVoicePreview(false);
     }
     setCallEnded(true);
     setTimeout(() => {
@@ -2093,7 +2124,7 @@ export function FakeCall() {
   return (
     <Page title="Fake Call" soft>
       <p className="-mt-4 mb-6 text-sm text-muted-foreground">
-        Real phone ringing sound, vibration, and authentic in-call audio to discreetly exit any situation.
+        Real Apple ringtone, vibration, and 100% authentic human voice recordings to discreetly exit any situation.
       </p>
 
       {/* Countdown Waiting Card */}
@@ -2121,10 +2152,30 @@ export function FakeCall() {
           <span className="field-label">Quick Presets</span>
           <div className="flex gap-2">
             {[
-              { label: 'Maa ❤️', phone: '+91 98201 45892' },
-              { label: 'Papa', phone: '+91 94150 12830' },
-              { label: 'Police 112', phone: '112 · Emergency' },
-              { label: 'Boss', phone: '+91 97110 39201' },
+              {
+                label: 'Maa ❤️',
+                phone: '+91 98201 45892',
+                audio: '/audio/mom_call.mp3',
+                script: 'हाँ बेटा, कहाँ हो तुम? मैं नीचे गाड़ी में वेट कर रही हूँ, जल्दी बाहर आ जाओ, लेट हो रहा है।'
+              },
+              {
+                label: 'Papa',
+                phone: '+91 94150 12830',
+                audio: '/audio/dad_call.mp3',
+                script: 'हेलो? कहाँ हो बेटा? मैं बाहर खड़ा हूँ, जल्दी निकलो, चलो घर चलना है।'
+              },
+              {
+                label: 'Police 112',
+                phone: '112 · Emergency',
+                audio: '/audio/police_call.mp3',
+                script: 'कंट्रोल रूम से कॉल है। क्या आप सुरक्षित हैं? नजदीकी टीम आपकी लोकेशन पर आ रही है।'
+              },
+              {
+                label: 'Friend',
+                phone: '+91 97110 39201',
+                audio: '/audio/friend_call.mp3',
+                script: 'Hey! Where are you? We are all waiting outside for you, please come quickly!'
+              },
             ].map(p => (
               <Button
                 key={p.label}
@@ -2134,6 +2185,8 @@ export function FakeCall() {
                 onClick={() => {
                   setName(p.label);
                   setPhoneNumber(p.phone);
+                  setVoiceClip(p.audio);
+                  setScript(p.script);
                 }}
               >
                 {p.label}
@@ -2144,6 +2197,7 @@ export function FakeCall() {
 
         <Field label="Caller Number / Display Subtitle" value={phoneNumber} onChange={setPhoneNumber} />
 
+        {/* Ringtone selector with Apple Ringtone test */}
         <div>
           <div className="flex items-center justify-between mb-1">
             <span className="field-label mb-0">Ringtone Sound</span>
@@ -2178,6 +2232,57 @@ export function FakeCall() {
           </select>
         </div>
 
+        {/* Real Human Voice Selector */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="field-label mb-0">Real Caller Voice Recording</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (isPlayingVoicePreview) {
+                  if (previewVoiceAudioRef.current) {
+                    previewVoiceAudioRef.current.pause();
+                    previewVoiceAudioRef.current = null;
+                  }
+                  setIsPlayingVoicePreview(false);
+                } else {
+                  setIsPlayingVoicePreview(true);
+                  const a = new Audio(voiceClip);
+                  a.volume = 1.0;
+                  a.onended = () => setIsPlayingVoicePreview(false);
+                  a.play().catch(() => setIsPlayingVoicePreview(false));
+                  previewVoiceAudioRef.current = a;
+                }
+              }}
+              className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
+            >
+              <span>{isPlayingVoicePreview ? '⏹ Stop Voice' : '▶ Listen Voice Recording'}</span>
+            </button>
+          </div>
+          <select
+            className="field"
+            value={voiceClip}
+            onChange={e => {
+              const val = e.target.value;
+              setVoiceClip(val);
+              if (val === '/audio/mom_call.mp3') {
+                setScript('हाँ बेटा, कहाँ हो तुम? मैं नीचे गाड़ी में वेट कर रही हूँ, जल्दी बाहर आ जाओ, लेट हो रहा है।');
+              } else if (val === '/audio/dad_call.mp3') {
+                setScript('हेलो? कहाँ हो बेटा? मैं बाहर खड़ा हूँ, जल्दी निकलो, चलो घर चलना है।');
+              } else if (val === '/audio/police_call.mp3') {
+                setScript('कंट्रोल रूम से कॉल है। क्या आप सुरक्षित हैं? नजदीकी टीम आपकी लोकेशन पर आ रही है।');
+              } else {
+                setScript('Hey! Where are you? We are all waiting outside for you, please come quickly!');
+              }
+            }}
+          >
+            <option value="/audio/mom_call.mp3">Mom's Real Voice (Hindi: "Haan beta kahan ho, main niche gaadi me...")</option>
+            <option value="/audio/dad_call.mp3">Dad's Real Voice (Hindi: "Hello? Kahan ho beta, main bahar khada...")</option>
+            <option value="/audio/police_call.mp3">Police Control (Hindi: "Control room se call hai, team aa rahi hai...")</option>
+            <option value="/audio/friend_call.mp3">Friend's Voice (English: "Hey! Where are you? We are all waiting...")</option>
+          </select>
+        </div>
+
         <label className="block">
           <span className="field-label">Trigger Delay · {delay === 0 ? 'Instant (0s)' : `${delay} seconds`}</span>
           <div className="grid grid-cols-4 gap-2 mt-1.5">
@@ -2198,16 +2303,12 @@ export function FakeCall() {
           </div>
         </label>
 
-        <label className="block">
-          <span className="field-label">Caller Voice Script (Speaks when answered)</span>
-          <textarea
-            className="textarea"
-            rows={3}
-            value={script}
-            onChange={e => setScript(e.target.value)}
-            placeholder="What should the caller say when you pick up?"
-          />
-        </label>
+        <div className="rounded-2xl bg-muted/50 border border-border p-3.5">
+          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Live In-Call Voice Line:</span>
+          <p className="text-xs font-medium italic text-foreground/80 leading-relaxed">
+            "{script}"
+          </p>
+        </div>
       </div>
 
       <Primary className="mt-8 w-full" onClick={handleStartCall}>
