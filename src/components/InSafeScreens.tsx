@@ -139,6 +139,137 @@ function GpsCrosshairIcon({ size = 16, className = '' }: { size?: number; classN
   );
 }
 
+function project(lat: number, lng: number, zoom: number) {
+  const siny = Math.sin((lat * Math.PI) / 180);
+  const clampedSiny = Math.min(Math.max(siny, -0.9999), 0.9999);
+  const scale = 256 * Math.pow(2, zoom);
+  return {
+    x: scale * (0.5 + lng / 360),
+    y: scale * (0.5 - Math.log((1 + clampedSiny) / (1 - clampedSiny)) / (4 * Math.PI)),
+  };
+}
+
+function unproject(px: number, py: number, zoom: number) {
+  const scale = 256 * Math.pow(2, zoom);
+  const lng = (px / scale - 0.5) * 360;
+  const y = 0.5 - py / scale;
+  const lat = (90 - (360 * Math.atan(Math.exp(-y * 2 * Math.PI))) / Math.PI);
+  return { lat, lng };
+}
+
+function InteractiveTileMap({
+  lat,
+  lng,
+  zoom,
+  onPan,
+}: {
+  lat: number;
+  lng: number;
+  zoom: number;
+  onPan?: (lat: number, lng: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 380, height: 330 });
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (containerRef.current) {
+      setDimensions({
+        width: containerRef.current.clientWidth || 380,
+        height: containerRef.current.clientHeight || 330,
+      });
+    }
+  }, []);
+
+  const centerPixel = project(lat, lng, zoom);
+  const effectiveCenter = {
+    x: centerPixel.x - offset.x,
+    y: centerPixel.y - offset.y,
+  };
+
+  const startX = effectiveCenter.x - dimensions.width / 2;
+  const startY = effectiveCenter.y - dimensions.height / 2;
+
+  const minTileX = Math.floor(startX / 256);
+  const maxTileX = Math.floor((startX + dimensions.width) / 256);
+  const minTileY = Math.floor(startY / 256);
+  const maxTileY = Math.floor((startY + dimensions.height) / 256);
+
+  const tiles = [];
+  const maxCoord = Math.pow(2, zoom);
+
+  for (let tx = minTileX; tx <= maxTileX; tx++) {
+    for (let ty = minTileY; ty <= maxTileY; ty++) {
+      if (ty < 0 || ty >= maxCoord) continue;
+      const normalizedTx = ((tx % maxCoord) + maxCoord) % maxCoord;
+      tiles.push({
+        key: `${zoom}-${ty}-${normalizedTx}`,
+        x: tx * 256 - startX,
+        y: ty * 256 - startY,
+        src: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${ty}/${normalizedTx}`,
+      });
+    }
+  }
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    isDragging.current = true;
+    dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+    setOffset({
+      x: e.clientX - dragStart.current.x,
+      y: e.clientY - dragStart.current.y,
+    });
+  };
+
+  const handlePointerUp = () => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    if (offset.x !== 0 || offset.y !== 0) {
+      const newCenter = unproject(
+        centerPixel.x - offset.x,
+        centerPixel.y - offset.y,
+        zoom
+      );
+      setOffset({ x: 0, y: 0 });
+      onPan?.(newCenter.lat, newCenter.lng);
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className="w-full h-full relative overflow-hidden select-none cursor-grab active:cursor-grabbing bg-slate-100 dark:bg-slate-900"
+    >
+      {tiles.map((tile) => (
+        <img
+          key={tile.key}
+          src={tile.src}
+          alt=""
+          loading="eager"
+          draggable={false}
+          className="absolute pointer-events-none select-none transition-opacity duration-150"
+          style={{
+            left: tile.x,
+            top: tile.y,
+            width: 256,
+            height: 256,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 const MAPPLS_KEY = 'pxmvthgexkyugaoxguodksxaxupzeqwtyedq';
 
 function MapVisual({ incidents = false }: { incidents?: boolean }) {
@@ -294,21 +425,17 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
       className={`relative overflow-hidden rounded-[22px] ${incidents ? 'h-[390px]' : 'h-[330px]'}`}
       style={{ border: '1px solid rgba(226, 232, 240, 0.8)', background: '#FFFFFF' }}
     >
-      {/* MapmyIndia Vector Canvas or Live Map View */}
+      {/* MapmyIndia Vector Canvas or Native Interactive Tile Map */}
       {mapplsReady ? (
         <div ref={mapContainerRef} className="w-full h-full" />
       ) : (
-        <iframe
-          key={`${lat.toFixed(4)}-${lng.toFixed(4)}-${zoomLevel}`}
-          title="MapmyIndia Live Safety Map"
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.016 * Math.pow(0.65, zoomLevel - 15)},${lat - 0.012 * Math.pow(0.65, zoomLevel - 15)},${lng + 0.016 * Math.pow(0.65, zoomLevel - 15)},${lat + 0.012 * Math.pow(0.65, zoomLevel - 15)}&layer=mapnik&marker=${lat},${lng}`}
-          style={{
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            filter: 'contrast(1.03) saturate(1.08)',
+        <InteractiveTileMap
+          lat={lat}
+          lng={lng}
+          zoom={zoomLevel}
+          onPan={(newLat, newLng) => {
+            update({ currentLocation: { lat: newLat, lng: newLng } });
           }}
-          loading="lazy"
         />
       )}
 
