@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ClientProvider from "@/components/ClientProvider";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "InSafe — Safety is Freedom",
@@ -31,6 +32,7 @@ export default function RootLayout({
           </div>
         </ClientProvider>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
