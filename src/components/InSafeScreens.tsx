@@ -708,7 +708,7 @@ export function OnboardingScreen() {
 
             <div className="screen-card p-5 border border-border space-y-4">
               <div className="flex items-center gap-3.5">
-                <UserAvatar avatarId={selectedAvatar} size={54} />
+                <UserAvatar gender={gender} size={54} />
                 <div>
                   <h3 className="font-extrabold text-base">{name.trim() || 'Priya Sharma'}</h3>
                   <p className="text-xs text-muted-foreground">{phone.trim() || '+91 98765 43210'}</p>
@@ -1054,7 +1054,10 @@ export function SettingsScreen() {
                 size="icon"
                 aria-label={row.title}
                 onClick={() => {
-                  if (row.title === 'Reset to Welcome') update({ emergency: { active: false, trigger: 'sos' } });
+                  if (row.title === 'Reset to Welcome') {
+                    if (typeof window !== 'undefined' && !window.confirm('Reset app setup? Your safety settings will be re-initialized.')) return;
+                    update({ emergency: { active: false, trigger: 'sos' } });
+                  }
                   navigate({ to: row.to! });
                 }}
               >
@@ -1207,7 +1210,20 @@ export function ContactsScreen() {
                 <Button variant="link" size="sm" className="px-0 text-brand text-xs" onClick={() => update({ contacts: state.contacts.map(c => ({ ...c, primary: c.id === contact.id })) })}>
                   Mark as primary
                 </Button>
-                <Button variant="link" size="sm" className="ml-auto px-0 text-destructive text-xs" onClick={() => { update({ contacts: state.contacts.filter(c => c.id !== contact.id) }); notify('Contact removed.'); }}>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="ml-auto px-0 text-destructive text-xs"
+                  onClick={() => {
+                    if (state.contacts.length <= 1) {
+                      notify('⚠️ Safety Alert: You must keep at least 1 emergency contact.');
+                      return;
+                    }
+                    if (typeof window !== 'undefined' && !window.confirm(`Remove ${contact.name} from emergency contacts?`)) return;
+                    update({ contacts: state.contacts.filter(c => c.id !== contact.id) });
+                    notify('Contact removed safely.');
+                  }}
+                >
                   <Trash2 size={13} className="mr-1"/> Remove
                 </Button>
               </div>
@@ -1278,10 +1294,12 @@ export function SafeNet() {
 
   const report = (e: FormEvent) => {
     e.preventDefault();
-    update({ reports: [{ id: String(Date.now()), category, severity, description }, ...state.reports] });
+    const cleanDesc = description.slice(0, 300).replace(/<[^>]*>/g, '').trim();
+    if (!cleanDesc) return;
+    update({ reports: [{ id: String(Date.now()), category, severity, description: cleanDesc }, ...state.reports] });
     setDescription('');
     setOpen(false);
-    notify('Incident reported to InSafe Network.');
+    notify('Incident reported securely to InSafe Network.');
   };
 
   return (
