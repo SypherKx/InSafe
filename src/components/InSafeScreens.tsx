@@ -15,27 +15,48 @@ import type { Contact } from '@/types';
 
 const splash = '/images/splash-hero.jpg';
 
-// Helper to render Avatar cleanly
-export function UserAvatar({ avatarId, size = 46 }: { avatarId?: string; size?: number }) {
-  const av = getAvatarById(avatarId || 'f1');
+export function getProfilePhotoByGender(gender?: string): string {
+  if (gender === 'male') return '/images/profile-male.jpg';
+  if (gender === 'other' || gender === 'non-binary') return '/images/profile-other.jpg';
+  return '/images/profile-female.jpg';
+}
+
+// Helper to render real profile picture cleanly
+export function UserAvatar({
+  gender = 'female',
+  src,
+  avatarId,
+  size = 46,
+  className = ''
+}: {
+  gender?: string;
+  src?: string;
+  avatarId?: string;
+  size?: number;
+  className?: string;
+}) {
+  const photo =
+    src ||
+    (avatarId && avatarId.startsWith('/images/') ? avatarId : null) ||
+    getProfilePhotoByGender(
+      gender || (avatarId?.startsWith('m') ? 'male' : avatarId?.startsWith('nb') || avatarId?.startsWith('o') ? 'other' : 'female')
+    );
+
   return (
     <div
       style={{
         width: size,
         height: size,
-        borderRadius: '50%',
-        background: av.bg,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: size * 0.52,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-        border: '2px solid #FFFFFF',
-        userSelect: 'none',
-        flexShrink: 0,
+        minWidth: size,
+        minHeight: size,
       }}
+      className={`rounded-full overflow-hidden shrink-0 border-2 border-white shadow-md relative bg-muted select-none ${className}`}
     >
-      {av.emoji}
+      <img
+        src={photo}
+        alt="Profile"
+        className="w-full h-full object-cover object-center"
+      />
     </div>
   );
 }
@@ -328,8 +349,9 @@ export function OnboardingScreen() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
-  const [gender, setGender] = useState<'female' | 'male' | 'non-binary' | 'other'>(state.user.gender || 'female');
-  const [selectedAvatar, setSelectedAvatar] = useState(state.user.avatar || 'f1');
+  const [gender, setGender] = useState<'female' | 'male' | 'other'>(
+    (state.user.gender as any) === 'male' ? 'male' : (state.user.gender as any) === 'other' ? 'other' : 'female'
+  );
   const [name, setName] = useState(state.user.name || '');
   const [phone, setPhone] = useState(state.user.phone || '');
 
@@ -343,8 +365,8 @@ export function OnboardingScreen() {
     state.contacts.length
       ? state.contacts
       : [
-          { id: '1', name: 'Maa (Mom)', phone: '+91 98765 43210', relation: 'Mother', primary: true, alerts: true, location: true, avatar: 'f2' },
-          { id: '2', name: 'Papa (Dad)', phone: '+91 98765 43211', relation: 'Father', primary: false, alerts: true, location: true, avatar: 'm2' }
+          { id: '1', name: 'Maa (Mom)', phone: '+91 98765 43210', relation: 'Mother', primary: true, alerts: true, location: true, avatar: '/images/profile-female.jpg' },
+          { id: '2', name: 'Papa (Dad)', phone: '+91 98765 43211', relation: 'Father', primary: false, alerts: true, location: true, avatar: '/images/profile-male.jpg' }
         ]
   );
 
@@ -352,16 +374,10 @@ export function OnboardingScreen() {
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
   const [newContactRelation, setNewContactRelation] = useState('Family');
-  const [newContactAvatar, setNewContactAvatar] = useState('f3');
+  const [newContactGender, setNewContactGender] = useState<'female' | 'male' | 'other'>('female');
 
-  const filteredAvatars = AVATAR_OPTIONS.filter(a =>
-    gender === 'other' ? true : a.gender === gender
-  );
-
-  const handleGenderChange = (g: 'female' | 'male' | 'non-binary' | 'other') => {
+  const handleGenderChange = (g: 'female' | 'male' | 'other') => {
     setGender(g);
-    const matching = AVATAR_OPTIONS.find(a => a.gender === g);
-    if (matching) setSelectedAvatar(matching.id);
   };
 
   const handleAllowContacts = () => {
@@ -378,7 +394,7 @@ export function OnboardingScreen() {
       name: newContactName.trim(),
       phone: newContactPhone.trim(),
       relation: newContactRelation,
-      avatar: newContactAvatar,
+      avatar: getProfilePhotoByGender(newContactGender),
       primary: contactsList.length === 0,
       alerts: true,
       location: true
@@ -405,17 +421,18 @@ export function OnboardingScreen() {
   const handleFinishSetup = () => {
     const finalName = name.trim() || (gender === 'female' ? 'Priya Sharma' : gender === 'male' ? 'Aryan Sharma' : 'Alex');
     const finalPhone = phone.trim() || '+91 98765 43210';
+    const profilePic = getProfilePhotoByGender(gender);
 
     update({
       user: {
         name: finalName,
         phone: finalPhone,
         gender,
-        avatar: selectedAvatar,
+        avatar: profilePic,
         onboarded: true,
       },
       contacts: contactsList.length ? contactsList : [
-        { id: '1', name: 'Emergency SOS Contact', phone: '+91 98765 43210', relation: 'Family', primary: true, alerts: true, location: true, avatar: 'f2' }
+        { id: '1', name: 'Emergency SOS Contact', phone: '+91 98765 43210', relation: 'Family', primary: true, alerts: true, location: true, avatar: '/images/profile-female.jpg' }
       ]
     });
 
@@ -446,83 +463,64 @@ export function OnboardingScreen() {
           />
         </div>
 
-        {/* STEP 1: GENDER & AVATAR */}
+        {/* STEP 1: GENDER SELECTION & AUTO PHOTO */}
         {step === 1 && (
           <div className="mt-6 space-y-6 animate-fade-in">
             <div>
-              <span className="text-xs font-bold text-brand uppercase tracking-wider">Step 1 · Identity</span>
+              <span className="text-xs font-bold text-brand uppercase tracking-wider">Step 1 · Profile Photo & Gender</span>
               <h1 className="text-[28px] font-extrabold leading-tight mt-1 text-foreground">
-                Choose Gender & Avatar
+                Select Your Gender
               </h1>
               <p className="text-xs text-muted-foreground mt-1">
-                Select your gender to pick from tailored safety avatars.
+                Your profile picture automatically updates based on your gender selection.
               </p>
             </div>
 
-            {/* Gender Selection */}
+            {/* Live Auto-Assigned Profile Photo Preview */}
+            <div className="screen-card p-6 border border-border flex flex-col items-center justify-center text-center">
+              <div className="relative">
+                <UserAvatar gender={gender} size={112} className="ring-4 ring-brand/20 shadow-xl" />
+                <span className="absolute -bottom-1 -right-1 rounded-full border-2 border-card bg-brand p-1 text-primary-foreground shadow">
+                  <ShieldCheck size={16}/>
+                </span>
+              </div>
+              <h3 className="mt-3.5 font-extrabold text-base capitalize text-foreground">
+                {gender === 'female' ? 'Female Profile' : gender === 'male' ? 'Male Profile' : 'Other / Non-Binary Profile'}
+              </h3>
+              <span className="mt-0.5 text-xs text-brand font-semibold flex items-center gap-1">
+                <Sparkles size={13} /> Photo auto-assigned
+              </span>
+            </div>
+
+            {/* 3 Gender Selection Cards */}
             <div>
-              <span className="field-label">Select Gender</span>
-              <div className="grid grid-cols-2 gap-2.5">
+              <span className="field-label">Choose Gender</span>
+              <div className="grid grid-cols-3 gap-3">
                 {[
-                  { id: 'female', label: 'Female', icon: '👩' },
-                  { id: 'male', label: 'Male', icon: '👨' },
-                  { id: 'non-binary', label: 'Non-Binary', icon: '🧑' },
-                  { id: 'other', label: 'Other', icon: '🌈' },
+                  { id: 'female', label: 'Female', photo: '/images/profile-female.jpg' },
+                  { id: 'male', label: 'Male', photo: '/images/profile-male.jpg' },
+                  { id: 'other', label: 'Other', photo: '/images/profile-other.jpg' },
                 ].map(g => (
                   <button
                     key={g.id}
                     type="button"
                     onClick={() => handleGenderChange(g.id as any)}
-                    className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl border transition-all text-sm font-bold ${
+                    className={`flex flex-col items-center p-3 rounded-2xl border transition-all text-xs font-bold ${
                       gender === g.id
-                        ? 'border-brand bg-brand-soft text-brand shadow-sm'
+                        ? 'border-brand bg-brand-soft text-brand shadow-md scale-105'
                         : 'border-border bg-card text-foreground hover:bg-muted'
                     }`}
                   >
-                    <span className="text-xl">{g.icon}</span>
-                    <span>{g.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Avatar Picker */}
-            <div>
-              <span className="field-label">Choose Your Avatar</span>
-              <div className="grid grid-cols-4 gap-3 max-h-56 overflow-y-auto p-1 scrollbar-none">
-                {filteredAvatars.map(av => (
-                  <div
-                    key={av.id}
-                    onClick={() => setSelectedAvatar(av.id)}
-                    className={`relative flex flex-col items-center p-2 rounded-2xl border cursor-pointer transition-all ${
-                      selectedAvatar === av.id
-                        ? 'border-brand bg-brand-soft scale-105 shadow-md'
-                        : 'border-border bg-card hover:bg-muted'
-                    }`}
-                  >
-                    <div
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: '50%',
-                        background: av.bg,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 26,
-                      }}
-                    >
-                      {av.emoji}
+                    <div className="w-12 h-12 rounded-full overflow-hidden border border-border shadow-sm mb-2">
+                      <img src={g.photo} alt={g.label} className="w-full h-full object-cover" />
                     </div>
-                    <span className="text-[10px] font-semibold mt-1.5 max-w-[65px] truncate text-center text-foreground">
-                      {av.label.split(' ')[0]}
-                    </span>
-                    {selectedAvatar === av.id && (
-                      <span className="absolute -top-1.5 -right-1.5 bg-brand text-white rounded-full p-0.5 shadow-sm">
-                        <Check size={12} strokeWidth={3} />
+                    <span>{g.label}</span>
+                    {gender === g.id && (
+                      <span className="mt-1 text-[10px] bg-brand text-white px-2 py-0.5 rounded-full font-bold">
+                        Active
                       </span>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -1230,18 +1228,27 @@ export function ContactsScreen() {
               <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close"><X/></Button>
             </div>
 
-            {/* Avatar Picker for Contact */}
+            {/* Contact Photo Selector */}
             <div className="mt-4">
-              <span className="field-label">Choose Avatar</span>
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-                {AVATAR_OPTIONS.map(av => (
+              <span className="field-label">Contact Photo</span>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: 'Female', photo: '/images/profile-female.jpg' },
+                  { label: 'Male', photo: '/images/profile-male.jpg' },
+                  { label: 'Other', photo: '/images/profile-other.jpg' },
+                ].map(p => (
                   <button
-                    key={av.id}
+                    key={p.label}
                     type="button"
-                    onClick={() => setAvatar(av.id)}
-                    className={`p-1 rounded-full border-2 transition-transform ${avatar === av.id ? 'border-brand scale-110' : 'border-transparent opacity-75'}`}
+                    onClick={() => setAvatar(p.photo)}
+                    className={`flex items-center gap-2 p-2 rounded-xl border transition-all text-xs font-bold ${
+                      avatar === p.photo ? 'border-brand bg-brand-soft text-brand shadow-sm scale-105' : 'border-border bg-card'
+                    }`}
                   >
-                    <UserAvatar avatarId={av.id} size={42} />
+                    <div className="w-8 h-8 rounded-full overflow-hidden border border-border shrink-0">
+                      <img src={p.photo} alt={p.label} className="w-full h-full object-cover" />
+                    </div>
+                    <span>{p.label}</span>
                   </button>
                 ))}
               </div>
@@ -1457,21 +1464,14 @@ export function MuteCall() {
   );
 }
 
-// 11. PROFILE SCREEN (Setting me jakar Avatar aur Gender change karne ka option)
+// 11. PROFILE SCREEN (Setting me jakar Gender aur Photo auto-change karne ka option)
 export function Profile() {
   const { state, update, notify } = useApp();
   const [name, setName] = useState(state.user.name);
   const [phone, setPhone] = useState(state.user.phone);
-  const [gender, setGender] = useState<'female' | 'male' | 'non-binary' | 'other'>(state.user.gender || 'female');
-  const [avatar, setAvatar] = useState(state.user.avatar || 'f1');
-  const [activeTab, setActiveTab] = useState<'all' | 'female' | 'male' | 'neutral'>('all');
-
-  const filteredAvatars = AVATAR_OPTIONS.filter(a => {
-    if (activeTab === 'female') return a.gender === 'female';
-    if (activeTab === 'male') return a.gender === 'male';
-    if (activeTab === 'neutral') return a.gender === 'non-binary' || a.gender === 'other';
-    return true;
-  });
+  const [gender, setGender] = useState<'female' | 'male' | 'other'>(
+    (state.user.gender as any) === 'male' ? 'male' : (state.user.gender as any) === 'other' ? 'other' : 'female'
+  );
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -1481,80 +1481,59 @@ export function Profile() {
         name,
         phone,
         gender,
-        avatar,
+        avatar: getProfilePhotoByGender(gender),
       }
     });
-    notify('Profile & avatar updated successfully!');
+    notify('Profile updated! Photo set automatically.');
   };
 
   return (
-    <Page title="Change Avatar & Profile" back="/settings">
-      {/* Current Selected Avatar Display */}
-      <div className="mb-6 grid place-items-center">
-        <UserAvatar avatarId={avatar} size={84} />
-        <span className="mt-2 text-xs font-bold text-brand flex items-center gap-1">
-          <Sparkles size={13}/> Selected Avatar
+    <Page title="Profile & Photo" back="/settings">
+      {/* Current Photo Display */}
+      <div className="mb-6 grid place-items-center text-center">
+        <div className="relative">
+          <UserAvatar gender={gender} size={112} className="ring-4 ring-brand/20 shadow-xl" />
+          <span className="absolute -bottom-1 -right-1 rounded-full border-2 border-card bg-brand p-1 text-primary-foreground shadow">
+            <ShieldCheck size={16}/>
+          </span>
+        </div>
+        <h3 className="mt-3.5 font-extrabold text-base capitalize text-foreground">
+          {gender === 'female' ? 'Female Photo' : gender === 'male' ? 'Male Photo' : 'Other Photo'}
+        </h3>
+        <span className="mt-0.5 text-xs text-brand font-semibold flex items-center gap-1">
+          <Sparkles size={13}/> Photo updates automatically with gender
         </span>
       </div>
 
-      {/* Avatar Category Filter Tabs */}
-      <div className="mb-4 flex gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold">
-        {[
-          { id: 'all', label: 'All' },
-          { id: 'female', label: 'Female 👩' },
-          { id: 'male', label: 'Male 👨' },
-          { id: 'neutral', label: 'Neutral 🧑' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-1 py-1.5 rounded-lg transition-colors ${
-              activeTab === tab.id ? 'bg-card text-foreground shadow-sm font-bold' : 'text-muted-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Avatars Grid */}
-      <div className="grid grid-cols-4 gap-3 mb-6 max-h-48 overflow-y-auto p-1">
-        {filteredAvatars.map(av => (
-          <button
-            key={av.id}
-            type="button"
-            onClick={() => setAvatar(av.id)}
-            className={`flex flex-col items-center p-2 rounded-2xl border transition-all ${
-              avatar === av.id ? 'border-brand bg-brand-soft shadow-md scale-105' : 'border-border bg-card hover:bg-muted'
-            }`}
-          >
-            <span className="text-3xl">{av.emoji}</span>
-            <span className="text-[10px] font-semibold mt-1 truncate max-w-full text-foreground">{av.label.split(' ')[0]}</span>
-          </button>
-        ))}
-      </div>
-
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="space-y-5">
         {/* Gender Selection */}
         <div>
-          <span className="field-label">Gender</span>
-          <div className="grid grid-cols-4 gap-2">
+          <span className="field-label">Select Gender (Changes Photo)</span>
+          <div className="grid grid-cols-3 gap-3">
             {[
-              { id: 'female', label: 'Female' },
-              { id: 'male', label: 'Male' },
-              { id: 'non-binary', label: 'Binary' },
-              { id: 'other', label: 'Other' },
+              { id: 'female', label: 'Female', photo: '/images/profile-female.jpg' },
+              { id: 'male', label: 'Male', photo: '/images/profile-male.jpg' },
+              { id: 'other', label: 'Other', photo: '/images/profile-other.jpg' },
             ].map(g => (
               <button
                 key={g.id}
                 type="button"
                 onClick={() => setGender(g.id as any)}
-                className={`py-2 rounded-xl border text-xs font-bold transition-colors ${
-                  gender === g.id ? 'border-brand bg-brand-soft text-brand' : 'border-border bg-card'
+                className={`flex flex-col items-center p-3 rounded-2xl border transition-all text-xs font-bold ${
+                  gender === g.id
+                    ? 'border-brand bg-brand-soft text-brand shadow-md scale-105'
+                    : 'border-border bg-card text-foreground hover:bg-muted'
                 }`}
               >
-                {g.label}
+                <div className="w-12 h-12 rounded-full overflow-hidden border border-border shadow-sm mb-2">
+                  <img src={g.photo} alt={g.label} className="w-full h-full object-cover" />
+                </div>
+                <span>{g.label}</span>
+                {gender === g.id && (
+                  <span className="mt-1 text-[10px] bg-brand text-white px-2 py-0.5 rounded-full font-bold">
+                    Active
+                  </span>
+                )}
               </button>
             ))}
           </div>
