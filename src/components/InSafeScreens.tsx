@@ -6,7 +6,8 @@ import {
   ArrowLeft, ArrowRight, Bell, Check, ChevronRight, Clock3,
   LogOut, Mail, MapPin, Megaphone, MessageCircle, Phone,
   PhoneCall, PhoneOff, Plus, Settings, ShieldCheck, Siren,
-  Trash2, UserRound, Users, VolumeX, X, Sparkles, AlertTriangle, ExternalLink
+  Trash2, UserRound, Users, VolumeX, X, Sparkles, AlertTriangle, ExternalLink,
+  Mic, MicOff, Volume2, Grid3X3, UserPlus, Video
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useApp } from '@/context/AppContext';
@@ -1741,79 +1742,555 @@ export function SafeNet() {
   );
 }
 
-// 9. FAKE CALL
+function playDTMFTone(digit: string) {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const freqs: Record<string, [number, number]> = {
+      '1': [697, 1209], '2': [697, 1336], '3': [697, 1477],
+      '4': [770, 1209], '5': [770, 1336], '6': [770, 1477],
+      '7': [852, 1209], '8': [852, 1336], '9': [852, 1477],
+      '*': [941, 1209], '0': [941, 1336], '#': [941, 1477],
+    };
+    const pair = freqs[digit] || [770, 1336];
+    pair.forEach(f => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    });
+  } catch {}
+}
+
+function startAudioRingtone(style: string) {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return () => {};
+    const ctx = new AudioCtx();
+    let alive = true;
+
+    const playCycle = () => {
+      if (!alive || ctx.state === 'closed') return;
+      const t = ctx.currentTime;
+      if (style === 'Classic ring') {
+        [440, 480].forEach(freq => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.18, t);
+          gain.gain.setValueAtTime(0.18, t + 0.4);
+          gain.gain.setValueAtTime(0.001, t + 0.5);
+          gain.gain.setValueAtTime(0.18, t + 0.6);
+          gain.gain.setValueAtTime(0.18, t + 1.0);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + 1.1);
+        });
+      } else if (style === 'Gentle chime') {
+        [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, t + i * 0.14);
+          gain.gain.setValueAtTime(0.22, t + i * 0.14);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.14 + 0.38);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t + i * 0.14);
+          osc.stop(t + i * 0.14 + 0.42);
+        });
+      } else {
+        [587.33, 880].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t + i * 0.2);
+          gain.gain.setValueAtTime(0.24, t + i * 0.2);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.2 + 0.55);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t + i * 0.2);
+          osc.stop(t + i * 0.2 + 0.6);
+        });
+      }
+    };
+
+    playCycle();
+    const interval = setInterval(playCycle, 2700);
+
+    return () => {
+      alive = false;
+      clearInterval(interval);
+      try { ctx.close(); } catch {}
+    };
+  } catch {
+    return () => {};
+  }
+}
+
+// 9. FAKE CALL (Hyper-Realistic Incoming & In-Call Experience)
 export function FakeCall() {
   const [name, setName] = useState('Mom');
-  const [ringtone, setRingtone] = useState('Classic ring');
-  const [delay, setDelay] = useState(5);
-  const [script, setScript] = useState('Hey, where are you? I’m waiting outside.');
+  const [phoneNumber, setPhoneNumber] = useState('+91 98201 45892');
+  const [ringtone, setRingtone] = useState('Gentle chime');
+  const [delay, setDelay] = useState(0);
+  const [script, setScript] = useState('Hey beta, where are you? I am waiting downstairs in the car, please come outside quickly.');
+
   const [active, setActive] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const [muted, setMuted] = useState(false);
+  const [speaker, setSpeaker] = useState(false);
+  const [showKeypad, setShowKeypad] = useState(false);
+  const [keypadInput, setKeypadInput] = useState('');
+  const [callEnded, setCallEnded] = useState(false);
+
+  const ringtoneStopRef = useRef<(() => void) | null>(null);
+  const vibrationIntervalRef = useRef<any>(null);
+
+  // Stop ringtone and vibration safely
+  const stopRinging = () => {
+    if (ringtoneStopRef.current) {
+      ringtoneStopRef.current();
+      ringtoneStopRef.current = null;
+    }
+    if (vibrationIntervalRef.current) {
+      clearInterval(vibrationIntervalRef.current);
+      vibrationIntervalRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+      try { navigator.vibrate(0); } catch {}
+    }
+  };
+
+  // Start realistic ringtone and vibration
+  const startRinging = () => {
+    stopRinging();
+    ringtoneStopRef.current = startAudioRingtone(ringtone);
+
+    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([400, 250, 400, 250, 400, 1000]);
+        vibrationIntervalRef.current = setInterval(() => {
+          navigator.vibrate([400, 250, 400, 250, 400, 1000]);
+        }, 2700);
+      } catch {}
+    }
+  };
+
+  // Handle countdown delay
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      setCountdown(null);
+      setAnswered(false);
+      setCallDuration(0);
+      setCallEnded(false);
+      setShowKeypad(false);
+      setKeypadInput('');
+      setActive(true);
+      startRinging();
+      return;
+    }
+    const timer = setTimeout(() => {
+      setCountdown(c => (c !== null ? c - 1 : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  // Call duration counter when answered
+  useEffect(() => {
+    if (!answered || callEnded) return;
+    const interval = setInterval(() => {
+      setCallDuration(d => d + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [answered, callEnded]);
+
+  // Clean up sounds on unmount
+  useEffect(() => {
+    return () => {
+      stopRinging();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const handleStartCall = () => {
+    if (delay > 0) {
+      setCountdown(delay);
+    } else {
+      setAnswered(false);
+      setCallDuration(0);
+      setCallEnded(false);
+      setShowKeypad(false);
+      setKeypadInput('');
+      setActive(true);
+      startRinging();
+    }
+  };
+
+  const handleAcceptCall = () => {
+    stopRinging();
+    setAnswered(true);
+    setCallDuration(0);
+
+    // Realistic speech playback through phone speaker
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(script);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.05;
+        window.speechSynthesis.speak(utterance);
+      } catch {}
+    }
+  };
+
+  const handleEndCall = () => {
+    stopRinging();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setCallEnded(true);
+    setTimeout(() => {
+      setActive(false);
+      setAnswered(false);
+      setCallEnded(false);
+      setCallDuration(0);
+    }, 800);
+  };
+
+  const formatCallTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <Page title="Fake Call" soft>
-      <p className="-mt-4 mb-6 text-sm text-muted-foreground">Trigger a realistic incoming call to discreetly step away.</p>
+      <p className="-mt-4 mb-6 text-sm text-muted-foreground">
+        Real phone ringing sound, vibration, and authentic in-call audio to discreetly exit any situation.
+      </p>
+
+      {/* Countdown Waiting Card */}
+      {countdown !== null && (
+        <div className="mb-6 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 text-center animate-pulse">
+          <div className="text-sm font-bold text-amber-600 dark:text-amber-400">
+            Incoming call scheduled in {countdown}s...
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Keep phone ready or lock screen. It will ring aloud.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCountdown(null)}
+            className="mt-3 rounded-full text-xs font-bold border-amber-500/40 text-amber-700 dark:text-amber-300"
+          >
+            Cancel Timer
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-5">
-        <Field label="Caller name" value={name} onChange={setName}/>
+        <Field label="Caller Name" value={name} onChange={setName} />
+
         <div>
-          <span className="field-label">Quick presets</span>
-          <div className="flex gap-3">
-            {['M', 'P', 'R'].map(letter => (
+          <span className="field-label">Quick Presets</span>
+          <div className="flex gap-2">
+            {[
+              { label: 'Maa ❤️', phone: '+91 98201 45892' },
+              { label: 'Papa', phone: '+91 94150 12830' },
+              { label: 'Police 112', phone: '112 · Emergency' },
+              { label: 'Boss', phone: '+91 97110 39201' },
+            ].map(p => (
               <Button
-                key={letter}
+                key={p.label}
                 variant="outline"
-                size="icon"
-                className="h-11 w-11 rounded-full border-brand text-brand"
-                onClick={() => setName(letter === 'M' ? 'Mom' : letter === 'P' ? 'Priya' : 'Rohan')}
+                size="sm"
+                className={`rounded-xl text-xs font-semibold ${name === p.label ? 'border-brand text-brand bg-brand-soft' : ''}`}
+                onClick={() => {
+                  setName(p.label);
+                  setPhoneNumber(p.phone);
+                }}
               >
-                {letter}
+                {p.label}
               </Button>
             ))}
           </div>
         </div>
+
+        <Field label="Caller Number / Display Subtitle" value={phoneNumber} onChange={setPhoneNumber} />
+
         <label className="block">
-          <span className="field-label">Ringtone</span>
+          <span className="field-label">Ringtone Sound</span>
           <select className="field" value={ringtone} onChange={e => setRingtone(e.target.value)}>
-            <option>Classic ring</option>
-            <option>Gentle chime</option>
-            <option>Soft pulse</option>
+            <option>Gentle chime (Modern phone)</option>
+            <option>Classic ring (Dual-tone bell)</option>
+            <option>Soft pulse (Discreet ring)</option>
           </select>
         </label>
+
         <label className="block">
-          <span className="field-label">Call delay · {delay} seconds</span>
-          <input className="w-full accent-brand" type="range" min="0" max="30" step="5" value={delay} onChange={e => setDelay(Number(e.target.value))}/>
+          <span className="field-label">Trigger Delay · {delay === 0 ? 'Instant (0s)' : `${delay} seconds`}</span>
+          <div className="grid grid-cols-4 gap-2 mt-1.5">
+            {[0, 5, 10, 30].map(sec => (
+              <button
+                key={sec}
+                type="button"
+                onClick={() => setDelay(sec)}
+                className={`py-2 text-xs font-bold rounded-xl border transition-all ${
+                  delay === sec
+                    ? 'bg-brand text-white border-brand shadow-sm'
+                    : 'bg-card text-foreground border-border hover:bg-muted'
+                }`}
+              >
+                {sec === 0 ? 'Now' : `${sec}s`}
+              </button>
+            ))}
+          </div>
         </label>
+
         <label className="block">
-          <span className="field-label">Conversation script</span>
-          <textarea className="textarea" value={script} onChange={e => setScript(e.target.value)}/>
+          <span className="field-label">Caller Voice Script (Speaks when answered)</span>
+          <textarea
+            className="textarea"
+            rows={3}
+            value={script}
+            onChange={e => setScript(e.target.value)}
+            placeholder="What should the caller say when you pick up?"
+          />
         </label>
       </div>
 
-      <Primary className="mt-8 w-full" onClick={() => { setAnswered(false); setActive(true); }}>
-        <PhoneCall size={18}/> Preview Call
+      <Primary className="mt-8 w-full" onClick={handleStartCall}>
+        <PhoneCall size={18} /> {delay > 0 ? `Schedule Call in ${delay}s` : 'Trigger Real Fake Call Now'}
       </Primary>
 
+      {/* FULL-SCREEN REALISTIC PHONE CALL INTERFACE */}
       {active && (
-        <div className="fixed inset-0 z-50 mx-auto flex w-full max-w-[430px] flex-col items-center bg-foreground px-6 py-12 text-primary-foreground animate-fade-in">
-          <Button variant="ghost" size="icon" onClick={() => setActive(false)} className="self-end text-primary-foreground" aria-label="Close call preview">
-            <X/>
-          </Button>
-          <span className="mt-20 grid h-28 w-28 place-items-center rounded-full bg-brand text-5xl font-semibold shadow-2xl">
-            {name[0] || 'M'}
-          </span>
-          <h2 className="mt-7 text-3xl font-bold">{name}</h2>
-          <p className="mt-2 text-sm opacity-80">{answered ? script : `Incoming call · ${ringtone}`}</p>
-          <p className="mt-2 text-xs opacity-50">Simulation</p>
-          <div className="mt-auto flex w-full justify-around pb-6">
-            <Button variant="ghost" className="flex h-auto flex-col gap-2 text-primary-foreground" onClick={() => setActive(false)}>
-              <span className="grid h-16 w-16 place-items-center rounded-full bg-destructive shadow-lg"><PhoneOff size={27}/></span>
-              Decline
-            </Button>
-            <Button variant="ghost" className="flex h-auto flex-col gap-2 text-primary-foreground" onClick={() => setAnswered(true)}>
-              <span className="grid h-16 w-16 place-items-center rounded-full bg-brand shadow-lg"><Phone size={27}/></span>
-              {answered ? 'Connected' : 'Accept'}
-            </Button>
+        <div className="fixed inset-0 z-50 flex flex-col bg-[#070B11] text-white select-none overflow-hidden animate-fade-in font-sans">
+          {/* Top Status Bar info */}
+          <div className="pt-12 px-6 flex justify-between items-center text-xs text-white/50 tracking-wider">
+            <span>InSafe Mobile</span>
+            <span className="text-white/40">5G · 100%</span>
           </div>
+
+          {!answered ? (
+            /* --- 1. REALISTIC INCOMING CALL SCREEN --- */
+            <div className="flex-1 flex flex-col items-center justify-between px-6 pt-10 pb-16">
+              {/* Caller Identity */}
+              <div className="flex flex-col items-center text-center">
+                <span className="text-xs uppercase tracking-widest text-white/60 mb-2 font-medium">Incoming Call</span>
+                <h1 className="text-4xl font-extrabold tracking-tight text-white mb-2">{name}</h1>
+                <p className="text-sm font-medium text-white/70">{phoneNumber}</p>
+
+                {/* Pulsing Avatar */}
+                <div className="relative mt-12">
+                  <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
+                  <div className="relative h-32 w-32 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl bg-gradient-to-tr from-slate-700 to-slate-800 flex items-center justify-center">
+                    <UserRound size={60} className="text-white/80" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons: Remind Me & Message */}
+              <div className="w-full max-w-[280px] flex justify-between px-4 text-xs text-white/70">
+                <button type="button" className="flex flex-col items-center gap-1.5 opacity-80 hover:opacity-100">
+                  <Clock3 size={22} />
+                  <span>Remind Me</span>
+                </button>
+                <button type="button" className="flex flex-col items-center gap-1.5 opacity-80 hover:opacity-100">
+                  <MessageCircle size={22} />
+                  <span>Message</span>
+                </button>
+              </div>
+
+              {/* Accept & Decline Buttons */}
+              <div className="w-full max-w-[320px] flex justify-between items-center px-4">
+                {/* Decline */}
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleEndCall}
+                    className="h-18 w-18 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 flex items-center justify-center text-white shadow-xl shadow-red-600/30 transition-transform"
+                    aria-label="Decline Call"
+                  >
+                    <PhoneOff size={30} />
+                  </button>
+                  <span className="text-xs font-semibold text-white/80">Decline</span>
+                </div>
+
+                {/* Accept */}
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAcceptCall}
+                    className="h-18 w-18 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 flex items-center justify-center text-white shadow-xl shadow-emerald-500/30 animate-bounce transition-transform"
+                    aria-label="Accept Call"
+                  >
+                    <Phone size={30} />
+                  </button>
+                  <span className="text-xs font-semibold text-white/80">Accept</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* --- 2. REALISTIC CONNECTED CALL SCREEN --- */
+            <div className="flex-1 flex flex-col justify-between px-6 pt-10 pb-14">
+              {/* Caller info & Live Timer */}
+              <div className="flex flex-col items-center text-center">
+                <h2 className="text-3xl font-extrabold text-white mb-1.5">{name}</h2>
+                <div className="text-sm font-semibold text-emerald-400 tracking-wider">
+                  {callEnded ? 'Call Ended' : formatCallTime(callDuration)}
+                </div>
+                <p className="text-xs text-white/50 mt-1">{phoneNumber}</p>
+
+                {/* Speaking waveform indicator */}
+                <div className="flex items-center gap-1 mt-6 h-6">
+                  {[...Array(5)].map((_, i) => (
+                    <span
+                      key={i}
+                      className="w-1 bg-emerald-400 rounded-full animate-pulse"
+                      style={{
+                        height: `${12 + (i % 3) * 8}px`,
+                        animationDelay: `${i * 120}ms`,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* In-Call Keypad Overlay (if open) */}
+              {showKeypad ? (
+                <div className="w-full max-w-[280px] mx-auto py-2">
+                  <div className="text-center text-xl tracking-widest text-emerald-300 font-mono h-8 mb-2">
+                    {keypadInput || ' '}
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].map(digit => (
+                      <button
+                        key={digit}
+                        type="button"
+                        onClick={() => {
+                          setKeypadInput(k => k + digit);
+                          playDTMFTone(digit);
+                        }}
+                        className="h-14 w-14 mx-auto rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 text-xl font-bold flex items-center justify-center transition-colors"
+                      >
+                        {digit}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowKeypad(false)}
+                    className="w-full mt-4 text-xs font-semibold text-emerald-400 hover:underline text-center"
+                  >
+                    Hide Keypad
+                  </button>
+                </div>
+              ) : (
+                /* 6-Button In-Call Grid (Authentic iOS/Android Style) */
+                <div className="w-full max-w-[320px] mx-auto grid grid-cols-3 gap-y-7 gap-x-4">
+                  {/* Mute */}
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMuted(!muted)}
+                      className={`h-15 w-15 rounded-full flex items-center justify-center transition-all ${
+                        muted ? 'bg-white text-slate-900 shadow-lg' : 'bg-white/10 text-white hover:bg-white/15'
+                      }`}
+                    >
+                      {muted ? <MicOff size={24} /> : <Mic size={24} />}
+                    </button>
+                    <span className="text-[11px] font-medium text-white/80">{muted ? 'Unmute' : 'Mute'}</span>
+                  </div>
+
+                  {/* Keypad */}
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowKeypad(true)}
+                      className="h-15 w-15 rounded-full bg-white/10 hover:bg-white/15 active:bg-white/25 flex items-center justify-center text-white transition-all"
+                    >
+                      <Grid3X3 size={24} />
+                    </button>
+                    <span className="text-[11px] font-medium text-white/80">Keypad</span>
+                  </div>
+
+                  {/* Speaker */}
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSpeaker(!speaker)}
+                      className={`h-15 w-15 rounded-full flex items-center justify-center transition-all ${
+                        speaker ? 'bg-white text-slate-900 shadow-lg' : 'bg-white/10 text-white hover:bg-white/15'
+                      }`}
+                    >
+                      {speaker ? <Volume2 size={24} /> : <VolumeX size={24} />}
+                    </button>
+                    <span className="text-[11px] font-medium text-white/80">{speaker ? 'Speaker ON' : 'Speaker'}</span>
+                  </div>
+
+                  {/* Add Call */}
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      className="h-15 w-15 rounded-full bg-white/10 text-white/40 flex items-center justify-center cursor-not-allowed"
+                    >
+                      <UserPlus size={24} />
+                    </button>
+                    <span className="text-[11px] font-medium text-white/40">Add Call</span>
+                  </div>
+
+                  {/* FaceTime / Video */}
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      className="h-15 w-15 rounded-full bg-white/10 text-white/40 flex items-center justify-center cursor-not-allowed"
+                    >
+                      <Video size={24} />
+                    </button>
+                    <span className="text-[11px] font-medium text-white/40">FaceTime</span>
+                  </div>
+
+                  {/* Contacts */}
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      className="h-15 w-15 rounded-full bg-white/10 text-white/40 flex items-center justify-center cursor-not-allowed"
+                    >
+                      <Users size={24} />
+                    </button>
+                    <span className="text-[11px] font-medium text-white/40">Contacts</span>
+                  </div>
+                </div>
+              )}
+
+              {/* End Call Button */}
+              <div className="flex justify-center mt-6">
+                <button
+                  type="button"
+                  onClick={handleEndCall}
+                  className="h-18 w-18 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 flex items-center justify-center text-white shadow-xl shadow-red-600/40 transition-transform"
+                  aria-label="End Call"
+                >
+                  <PhoneOff size={30} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Page>
