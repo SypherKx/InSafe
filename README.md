@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# InSafe — Personal & Women Safety Platform
 
-## Getting Started
+<p align="center">
+  <img src="public/images/insafe-splash.jpg" alt="InSafe Preview" width="340" style="border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);" />
+</p>
 
-First, run the development server:
+<p align="center">
+  <strong>Safety is Freedom. Automated emergency alerts, live GPS geofencing, and discreet companion tools.</strong>
+</p>
+
+---
+
+## 🌟 Key Features
+
+### 1. Zero-Friction Onboarding & Identity
+- Direct onboarding with no password barriers.
+- **Gender Personalization**: Select Female, Male, Non-Binary, or Other.
+- **25+ Curated Safety Avatars**: Diverse, expressive avatar catalog for users and emergency contacts.
+- Quick profile and avatar management anytime in Settings.
+
+### 2. 3-Second Press & Hold SOS Trigger
+- Dedicated safety hold mechanism (`3-second hold`) prevents accidental triggers while remaining instantaneous in emergencies.
+- Dynamic circular progress fill and haptic vibration feedback.
+
+### 3. Automated WhatsApp SOS Dispatch (Zero-Click Required)
+- Background WhatsApp dispatch pipeline via `/api/sos-whatsapp`.
+- Automatically loops live GPS coordinates every **1 minute (60 seconds)** to all trusted emergency contacts until marked safe.
+- Tokenized message templates: `{{location}}`, `{{maps_link}}`, `{{timestamp}}`.
+
+### 4. Live Interactive OpenStreetMap & Geofencing
+- Real-time map rendering with a glowing 190px safety geofence zone.
+- Custom InSafe safety shield marker with coordinates centering.
+
+### 5. Discreet Safety Tools
+- **Fake Call Simulation**: Realistic incoming call screen with custom delay, ringtones, caller names, and interactive Accept/Decline simulation.
+- **Mute Call / Silent SOS**: Completely noiseless emergency alert activation for situations where you cannot speak.
+- **InSafe Network (SafeNet)**: Community incident reporting (poor lighting, unsafe areas, harassment) with neighborhood map pins.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js 18+ or 20+
+- npm, yarn, or pnpm
+
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/SypherKx/InSafe.git
+
+# Navigate to project folder
+cd InSafe
+
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📱 Mobile-First Experience
+InSafe is designed with an optimal mobile shell (`max-w-[430px]`) that provides a native mobile app feel directly in modern web browsers.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠️ Tech Stack
+- **Framework**: Next.js 16 (App Router)
+- **UI & Styling**: Tailwind CSS, Vanilla CSS Design System, Radix UI Slot
+- **Icons**: Lucide React
+- **Maps**: OpenStreetMap Live Geofence Integration
+- **Background Dispatch**: Next.js Serverless Route Handlers (`/api/sos-whatsapp`)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛡️ License
+MIT License. Built for community safety and empowerment.
