@@ -294,20 +294,20 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
       className={`relative overflow-hidden rounded-[22px] ${incidents ? 'h-[390px]' : 'h-[330px]'}`}
       style={{ border: '1px solid rgba(226, 232, 240, 0.8)', background: '#FFFFFF' }}
     >
-      {/* MapmyIndia Vector Canvas or Official MapmyIndia Embed */}
+      {/* MapmyIndia Vector Canvas or Live Map View */}
       {mapplsReady ? (
         <div ref={mapContainerRef} className="w-full h-full" />
       ) : (
         <iframe
           key={`${lat.toFixed(4)}-${lng.toFixed(4)}-${zoomLevel}`}
           title="MapmyIndia Live Safety Map"
-          src={`https://maps.mapmyindia.com/embed/@${lat},${lng},${zoomLevel}z`}
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.016 * Math.pow(0.65, zoomLevel - 15)},${lat - 0.012 * Math.pow(0.65, zoomLevel - 15)},${lng + 0.016 * Math.pow(0.65, zoomLevel - 15)},${lat + 0.012 * Math.pow(0.65, zoomLevel - 15)}&layer=mapnik&marker=${lat},${lng}`}
           style={{
             width: '100%',
             height: '100%',
             border: 'none',
+            filter: 'contrast(1.03) saturate(1.08)',
           }}
-          allow="geolocation; fullscreen"
           loading="lazy"
         />
       )}
