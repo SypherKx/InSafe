@@ -1293,47 +1293,63 @@ export function EmergencyScreen() {
 export function SettingsScreen() {
   const { state, update } = useApp();
   const navigate = useNavigate();
+
   const rows = [
-    { icon: UserRound, title: 'Change Avatar & Profile', sub: 'Select Male, Female or Neutral avatar', to: '/profile' },
-    { icon: Users, title: 'Emergency Contacts', sub: 'Manage SOS WhatsApp contacts', to: '/contacts' },
-    { icon: MapPin, title: 'Show My Location', sub: 'Allow location access', to: null },
-    { icon: Mail, title: 'Setup Auto Message', sub: 'Manage alert message', to: '/auto-message' },
-    { icon: LogOut, title: 'Reset to Welcome', sub: 'Click here to restart setup', to: '/' }
+    { icon: UserRound, title: 'Profile & Photos', sub: 'Change name, number & gender photo', to: '/profile' },
+    { icon: Users, title: 'Emergency Contacts', sub: 'Manage SOS WhatsApp contacts & alerts', to: '/contacts' },
+    { icon: MapPin, title: 'Show My Location', sub: 'Live GPS sharing during alerts', to: null },
+    { icon: Mail, title: 'Setup Auto Message', sub: 'Customize WhatsApp & SMS SOS template', to: '/auto-message' },
+    { icon: LogOut, title: 'Reset to Welcome', sub: 'Restart onboarding from beginning', to: '/' }
   ];
+
+  const handleRowClick = (row: typeof rows[0]) => {
+    if (row.to) {
+      if (row.title === 'Reset to Welcome') {
+        if (typeof window !== 'undefined' && !window.confirm('Reset app setup? Your safety settings will be re-initialized.')) return;
+        update({ emergency: { active: false, trigger: 'sos' } });
+      }
+      navigate({ to: row.to });
+    } else {
+      update({ shareLocation: !state.shareLocation });
+    }
+  };
 
   return (
     <Page title="Settings" soft>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {rows.map(row => (
-          <div key={row.title} className="flex items-center gap-3 border-b border-border/60 py-3.5">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-brand-soft text-brand">
-              <row.icon size={21} fill={row.title === 'Setup Auto Message' ? 'currentColor' : 'none'}/>
+          <div
+            key={row.title}
+            onClick={() => handleRowClick(row)}
+            className="flex items-center gap-3.5 border-b border-border/60 py-3.5 px-3 rounded-2xl cursor-pointer hover:bg-card/90 active:scale-[0.99] transition-all select-none group"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleRowClick(row);
+              }
+            }}
+          >
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-brand-soft text-brand group-hover:scale-105 transition-transform shadow-xs">
+              <row.icon size={22} fill={row.title === 'Setup Auto Message' ? 'currentColor' : 'none'}/>
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-[15px]">{row.title}</p>
+              <p className="font-bold text-[15px] text-foreground group-hover:text-brand transition-colors">{row.title}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">{row.sub}</p>
             </div>
             {row.to ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={row.title}
-                onClick={() => {
-                  if (row.title === 'Reset to Welcome') {
-                    if (typeof window !== 'undefined' && !window.confirm('Reset app setup? Your safety settings will be re-initialized.')) return;
-                    update({ emergency: { active: false, trigger: 'sos' } });
-                  }
-                  navigate({ to: row.to! });
-                }}
-              >
-                <ChevronRight size={19}/>
-              </Button>
+              <span className="text-muted-foreground/60 group-hover:text-brand group-hover:translate-x-0.5 transition-all p-1">
+                <ChevronRight size={20}/>
+              </span>
             ) : (
-              <Switch
-                label="Show my location"
-                checked={state.shareLocation}
-                onChange={() => update({ shareLocation: !state.shareLocation })}
-              />
+              <div onClick={(e) => e.stopPropagation()}>
+                <Switch
+                  label="Show my location"
+                  checked={state.shareLocation}
+                  onChange={() => update({ shareLocation: !state.shareLocation })}
+                />
+              </div>
             )}
           </div>
         ))}
@@ -1341,6 +1357,7 @@ export function SettingsScreen() {
     </Page>
   );
 }
+
 
 // 6. SETUP AUTO MESSAGE
 export function AutoMessage() {
