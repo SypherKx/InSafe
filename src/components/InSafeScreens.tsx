@@ -362,15 +362,21 @@ export function OnboardingScreen() {
   const [locationGranted, setLocationGranted] = useState(state.locationPermission);
   const [locationLoading, setLocationLoading] = useState(false);
 
-  // Emergency SOS Contacts
-  const [contactsList, setContactsList] = useState<Contact[]>(
-    state.contacts.length
-      ? state.contacts
-      : [
-          { id: '1', name: 'Maa (Mom)', phone: '+91 98765 43210', relation: 'Mother', primary: true, alerts: true, location: true, avatar: '/images/profile-female.jpg' },
-          { id: '2', name: 'Papa (Dad)', phone: '+91 98765 43211', relation: 'Father', primary: false, alerts: true, location: true, avatar: '/images/profile-male.jpg' }
-        ]
-  );
+  // Emergency SOS Contacts - ONLY consumer-entered real contacts
+  const [contactsList, setContactsList] = useState<Contact[]>(() => {
+    const isDummy = (c: any) =>
+      !c ||
+      c.phone === '+91 98765 43210' ||
+      c.phone === '+91 98765 43211' ||
+      c.phone === '112' ||
+      c.phone === '1091' ||
+      c.name?.includes('Maa') ||
+      c.name?.includes('Papa') ||
+      c.name?.includes('Police') ||
+      c.name?.includes('Helpline') ||
+      c.name?.includes('Emergency SOS');
+    return (state.contacts || []).filter(c => !isDummy(c));
+  });
 
   // Add new contact inline
   const [newContactName, setNewContactName] = useState('');
@@ -390,12 +396,15 @@ export function OnboardingScreen() {
 
   const handleAddEmergencyContact = (e: FormEvent) => {
     e.preventDefault();
-    if (!newContactName.trim() || !newContactPhone.trim()) return;
+    if (!newContactName.trim() || !newContactPhone.trim()) {
+      notify('Please enter contact name and WhatsApp number.');
+      return;
+    }
     const added: Contact = {
       id: String(Date.now()),
       name: newContactName.trim(),
       phone: newContactPhone.trim(),
-      relation: newContactRelation,
+      relation: newContactRelation || 'Family',
       avatar: getProfilePhotoByGender(newContactGender),
       primary: contactsList.length === 0,
       alerts: true,
@@ -404,7 +413,7 @@ export function OnboardingScreen() {
     setContactsList([...contactsList, added]);
     setNewContactName('');
     setNewContactPhone('');
-    notify('Emergency contact added.');
+    notify(`✓ Added ${added.name} to emergency contacts.`);
   };
 
   const removeContact = (id: string) => {
@@ -421,8 +430,8 @@ export function OnboardingScreen() {
   };
 
   const handleFinishSetup = () => {
-    const finalName = name.trim() || (gender === 'female' ? 'Priya Sharma' : gender === 'male' ? 'Aryan Sharma' : 'Alex');
-    const finalPhone = phone.trim() || '+91 98765 43210';
+    const finalName = name.trim() || (gender === 'female' ? 'Priya' : gender === 'male' ? 'Aryan' : 'User');
+    const finalPhone = phone.trim();
     const profilePic = getProfilePhotoByGender(gender);
 
     update({
@@ -433,9 +442,7 @@ export function OnboardingScreen() {
         avatar: profilePic,
         onboarded: true,
       },
-      contacts: contactsList.length ? contactsList : [
-        { id: '1', name: 'Emergency SOS Contact', phone: '+91 98765 43210', relation: 'Family', primary: true, alerts: true, location: true, avatar: '/images/profile-female.jpg' }
-      ]
+      contacts: contactsList, // Strictly only consumer-entered contacts
     });
 
     notify(`Welcome ${finalName}! InSafe protection is now active.`);
@@ -610,18 +617,25 @@ export function OnboardingScreen() {
             </div>
 
             {/* List of current emergency contacts */}
-            <div className="space-y-2.5">
-              {contactsList.map(c => (
-                <div key={c.id} className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-border">
-                  <UserAvatar avatarId={c.avatar} size={42} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-bold truncate">{c.name}</span>
-                      {c.primary && <span className="text-[10px] bg-brand-soft text-brand px-1.5 py-0.5 rounded-full font-bold">Primary</span>}
+            {contactsList.length === 0 ? (
+              <div className="p-4 bg-muted/40 rounded-2xl border border-dashed border-border text-center">
+                <p className="text-xs font-bold text-foreground">No Contacts Added Yet</p>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Add at least 1 trusted WhatsApp contact below to receive emergency SOS alerts.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {contactsList.map(c => (
+                  <div key={c.id} className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-border">
+                    <UserAvatar avatarId={c.avatar} size={42} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-bold truncate">{c.name}</span>
+                        {c.primary && <span className="text-[10px] bg-brand-soft text-brand px-1.5 py-0.5 rounded-full font-bold">Primary</span>}
+                      </div>
+                      <span className="text-xs text-muted-foreground">{c.relation} · {c.phone}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">{c.relation} · {c.phone}</span>
-                  </div>
-                  {contactsList.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeContact(c.id)}
@@ -630,10 +644,10 @@ export function OnboardingScreen() {
                     >
                       <Trash2 size={16} />
                     </button>
-                  )}
-                </div>
-              ))}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Add Contact Card */}
             <form onSubmit={handleAddEmergencyContact} className="screen-card p-4 border border-border space-y-3">
@@ -749,7 +763,13 @@ export function OnboardingScreen() {
           </Primary>
         )}
         {step === 4 && (
-          <Primary onClick={() => setStep(5)}>
+          <Primary onClick={() => {
+            if (contactsList.length === 0) {
+              notify('⚠️ Please add at least 1 emergency contact above.');
+              return;
+            }
+            setStep(5);
+          }}>
             Next: Live GPS Location <ArrowRight size={18} />
           </Primary>
         )}
@@ -892,7 +912,7 @@ export function Dashboard() {
           Auto-WhatsApp: Active (1 min)
         </span>
         <Link to="/contacts" className="text-brand font-bold hover:underline">
-          {state.contacts.length} Contacts →
+          {state.contacts.length > 0 ? `${state.contacts.length} Contacts →` : '+ Add Contacts'}
         </Link>
       </div>
 
@@ -984,22 +1004,28 @@ export function EmergencyScreen() {
             <strong className="mt-1 text-2xl font-black">InSafe</strong>
             <span className="text-[10px] opacity-80">Safety is Freedom</span>
           </div>
-          {state.contacts.slice(0, 6).map((contact, index) => {
-            const angle = (index * 360 / Math.min(state.contacts.length, 6) - 90) * Math.PI / 180;
-            return (
-              <div
-                key={contact.id}
-                title={contact.name}
-                className="absolute z-10 grid h-12 w-12 place-items-center rounded-full border-[3px] border-emergency-foreground/80 shadow-lg overflow-hidden"
-                style={{
-                  left: `calc(50% + ${Math.cos(angle) * 40}% - 24px)`,
-                  top: `calc(50% + ${Math.sin(angle) * 40}% - 24px)`
-                }}
-              >
-                <UserAvatar avatarId={contact.avatar || (index % 2 === 0 ? 'f2' : 'm1')} size={48} />
-              </div>
-            );
-          })}
+          {state.contacts.length > 0 ? (
+            state.contacts.slice(0, 6).map((contact, index) => {
+              const angle = (index * 360 / Math.min(state.contacts.length, 6) - 90) * Math.PI / 180;
+              return (
+                <div
+                  key={contact.id}
+                  title={contact.name}
+                  className="absolute z-10 grid h-12 w-12 place-items-center rounded-full border-[3px] border-emergency-foreground/80 shadow-lg overflow-hidden"
+                  style={{
+                    left: `calc(50% + ${Math.cos(angle) * 40}% - 24px)`,
+                    top: `calc(50% + ${Math.sin(angle) * 40}% - 24px)`
+                  }}
+                >
+                  <UserAvatar avatarId={contact.avatar || 'f2'} size={48} />
+                </div>
+              );
+            })
+          ) : (
+            <div className="absolute bottom-3 z-10 text-[11px] bg-emergency-glass px-3 py-1 rounded-full text-emergency-foreground/90 font-medium">
+              No contacts saved yet
+            </div>
+          )}
         </div>
       </div>
 
@@ -1200,56 +1226,64 @@ export function ContactsScreen() {
       }
     >
       <p className="-mt-4 mb-6 text-sm text-muted-foreground">People you trust, notified automatically on WhatsApp.</p>
-      <div className="space-y-3">
-        {state.contacts.map(contact => (
-          <div key={contact.id} className="screen-card p-4">
-            <div className="flex items-center gap-3">
-              <UserAvatar avatarId={contact.avatar || 'f2'} size={46} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-bold">{contact.name}</span>
-                  {contact.primary && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-semibold text-brand">Primary</span>}
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">{contact.relation} · {contact.phone}</p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => launch(contact)} aria-label={`Edit ${contact.name}`}>
-                <Settings size={17}/>
-              </Button>
-            </div>
-            <div className="mt-4 space-y-2.5 border-t border-border pt-3">
-              <div className="flex items-center justify-between text-xs font-medium">
-                Auto-WhatsApp SOS alerts
-                <Switch label={`SOS alerts for ${contact.name}`} checked={contact.alerts} onChange={() => modify(contact.id, { alerts: !contact.alerts })}/>
-              </div>
-              <div className="flex items-center justify-between text-xs font-medium">
-                Live location updates (1 min)
-                <Switch label={`Location updates for ${contact.name}`} checked={contact.location} onChange={() => modify(contact.id, { location: !contact.location })}/>
-              </div>
-              <div className="flex gap-3 pt-1">
-                <Button variant="link" size="sm" className="px-0 text-brand text-xs" onClick={() => update({ contacts: state.contacts.map(c => ({ ...c, primary: c.id === contact.id })) })}>
-                  Mark as primary
-                </Button>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="ml-auto px-0 text-destructive text-xs"
-                  onClick={() => {
-                    if (state.contacts.length <= 1) {
-                      notify('⚠️ Safety Alert: You must keep at least 1 emergency contact.');
-                      return;
-                    }
-                    if (typeof window !== 'undefined' && !window.confirm(`Remove ${contact.name} from emergency contacts?`)) return;
-                    update({ contacts: state.contacts.filter(c => c.id !== contact.id) });
-                    notify('Contact removed safely.');
-                  }}
-                >
-                  <Trash2 size={13} className="mr-1"/> Remove
-                </Button>
-              </div>
-            </div>
+      {state.contacts.length === 0 ? (
+        <div className="screen-card p-6 text-center border border-dashed border-border my-6">
+          <div className="mx-auto w-12 h-12 rounded-full bg-brand-soft text-brand grid place-items-center mb-3">
+            <Users size={24} />
           </div>
-        ))}
-      </div>
+          <h3 className="font-bold text-sm text-foreground">No Emergency Contacts Added</h3>
+          <p className="text-xs text-muted-foreground mt-1 max-w-[270px] mx-auto leading-relaxed">
+            Tap &quot;+ Add Emergency Contact&quot; below to add your trusted family or friends. Only contacts you enter will receive WhatsApp SOS alerts.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {state.contacts.map(contact => (
+            <div key={contact.id} className="screen-card p-4">
+              <div className="flex items-center gap-3">
+                <UserAvatar avatarId={contact.avatar || 'f2'} size={46} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-bold">{contact.name}</span>
+                    {contact.primary && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-semibold text-brand">Primary</span>}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{contact.relation} · {contact.phone}</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => launch(contact)} aria-label={`Edit ${contact.name}`}>
+                  <Settings size={17}/>
+                </Button>
+              </div>
+              <div className="mt-4 space-y-2.5 border-t border-border pt-3">
+                <div className="flex items-center justify-between text-xs font-medium">
+                  Auto-WhatsApp SOS alerts
+                  <Switch label={`SOS alerts for ${contact.name}`} checked={contact.alerts} onChange={() => modify(contact.id, { alerts: !contact.alerts })}/>
+                </div>
+                <div className="flex items-center justify-between text-xs font-medium">
+                  Live location updates (1 min)
+                  <Switch label={`Location updates for ${contact.name}`} checked={contact.location} onChange={() => modify(contact.id, { location: !contact.location })}/>
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <Button variant="link" size="sm" className="px-0 text-brand text-xs" onClick={() => update({ contacts: state.contacts.map(c => ({ ...c, primary: c.id === contact.id })) })}>
+                    Mark as primary
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="ml-auto px-0 text-destructive text-xs"
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && !window.confirm(`Remove ${contact.name} from emergency contacts?`)) return;
+                      update({ contacts: state.contacts.filter(c => c.id !== contact.id) });
+                      notify('Contact removed safely.');
+                    }}
+                  >
+                    <Trash2 size={13} className="mr-1"/> Remove
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <Primary className="mt-6 w-full" onClick={() => launch()}>
         <Plus size={18}/> Add Emergency Contact

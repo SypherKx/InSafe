@@ -27,19 +27,14 @@ type AppContextValue = {
 
 const initial: AppState = {
   user: {
-    name: 'Priya Sharma',
-    phone: '+91 98765 43210',
+    name: '',
+    phone: '',
     gender: 'female',
-    avatar: 'f1',
-    email: 'priya.sharma@example.com',
-    onboarded: true,
+    avatar: '/images/profile-female.jpg',
+    email: '',
+    onboarded: false,
   },
-  contacts: [
-    { id: '1', name: 'Maa (Mother)', phone: '+91 98765 43210', relation: 'Mother', primary: true, alerts: true, location: true, avatar: 'f2' },
-    { id: '2', name: 'Papa (Father)', phone: '+91 98765 43211', relation: 'Father', primary: false, alerts: true, location: true, avatar: 'm2' },
-    { id: '3', name: 'Police Emergency (112)', phone: '112', relation: 'Emergency', primary: false, alerts: true, location: true, avatar: 'o2' },
-    { id: '4', name: 'Women Helpline (1091)', phone: '1091', relation: 'Helpline', primary: false, alerts: true, location: false, avatar: 'f3' },
-  ],
+  contacts: [],
   reports: [
     { id: '1', category: 'Poor lighting', description: 'Street lights not working near Church Street.', severity: 'Medium' },
     { id: '2', category: 'Unsafe area', description: 'Reported near Brigade Road.', severity: 'High' },
@@ -70,12 +65,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
           Math.abs(parsed.currentLocation.lat - 28.6315) < 0.005 &&
           Math.abs(parsed.currentLocation.lng - 77.2167) < 0.005;
 
+        // Discard any legacy dummy/fake placeholder contacts
+        const isDummy = (c: any) =>
+          !c ||
+          c.phone === '+91 98765 43210' ||
+          c.phone === '+91 98765 43211' ||
+          c.phone === '112' ||
+          c.phone === '1091' ||
+          c.name?.includes('Maa') ||
+          c.name?.includes('Papa') ||
+          c.name?.includes('Police') ||
+          c.name?.includes('Helpline') ||
+          c.name?.includes('Emergency SOS');
+
+        const realContacts = Array.isArray(parsed.contacts)
+          ? parsed.contacts.filter((c: any) => !isDummy(c))
+          : [];
+
         setState(prev => ({
           ...prev,
           ...parsed,
           currentLocation: isOldDelhi ? { lat: 26.4652, lng: 80.3498 } : (parsed.currentLocation || prev.currentLocation),
           user: { ...prev.user, ...parsed.user },
-          contacts: parsed.contacts?.length ? parsed.contacts : prev.contacts,
+          contacts: realContacts,
         }));
       }
     } catch {}
