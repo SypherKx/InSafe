@@ -139,14 +139,75 @@ function GpsCrosshairIcon({ size = 16, className = '' }: { size?: number; classN
   );
 }
 
+const MAPPLS_KEY = 'pxmvthgexkyugaoxguodksxaxupzeqwtyedq';
+
 function MapVisual({ incidents = false }: { incidents?: boolean }) {
   const { state, update, notify } = useApp();
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapplsMapRef = useRef<any>(null);
+  const mapplsMarkerRef = useRef<any>(null);
+
   const [locating, setLocating] = useState(false);
   const [zoomDelta, setZoomDelta] = useState(0.012);
   const [detectedAddress, setDetectedAddress] = useState('Connaught Place, New Delhi');
+  const [mapplsReady, setMapplsReady] = useState(false);
 
   const lat = state.currentLocation?.lat || 28.6315;
   const lng = state.currentLocation?.lng || 77.2167;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Load MapmyIndia / Mappls Web SDK with consumer key
+    const scriptId = 'mappls-sdk-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement;
+
+    const initMappls = () => {
+      try {
+        if ((window as any).mappls && mapContainerRef.current) {
+          if (mapplsMapRef.current) {
+            mapplsMapRef.current.remove?.();
+            mapplsMapRef.current = null;
+          }
+          const map = new (window as any).mappls.Map(mapContainerRef.current, {
+            center: [lat, lng],
+            zoom: 15,
+            zoomControl: false,
+          });
+          mapplsMapRef.current = map;
+          const marker = new (window as any).mappls.Marker({
+            map: map,
+            position: { lat, lng }
+          });
+          mapplsMarkerRef.current = marker;
+          setMapplsReady(true);
+        }
+      } catch (e) {
+        console.warn('MapmyIndia SDK initialization:', e);
+      }
+    };
+
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = `https://apis.mappls.com/advancedmaps/api/${MAPPLS_KEY}/map_sdk?layer=vector&v=3.0`;
+      script.async = true;
+      script.onload = initMappls;
+      document.head.appendChild(script);
+    } else if ((window as any).mappls) {
+      initMappls();
+    }
+  }, []);
+
+  // Update Mappls marker when coords change
+  useEffect(() => {
+    if (mapplsReady && mapplsMapRef.current && mapplsMarkerRef.current) {
+      try {
+        mapplsMarkerRef.current.setPosition({ lat, lng });
+        mapplsMapRef.current.setCenter([lat, lng]);
+      } catch {}
+    }
+  }, [lat, lng, mapplsReady]);
 
   const handleLocateMe = () => {
     if (typeof window === 'undefined') return;
@@ -167,6 +228,13 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
           currentLocation: { lat: newLat, lng: newLng },
           locationPermission: true,
         });
+
+        if (mapplsReady && mapplsMapRef.current && mapplsMarkerRef.current) {
+          try {
+            mapplsMarkerRef.current.setPosition({ lat: newLat, lng: newLng });
+            mapplsMapRef.current.setCenter([newLat, newLng]);
+          } catch {}
+        }
 
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${newLat}&lon=${newLng}`, {
@@ -199,26 +267,55 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
     );
   };
 
-  const zoomIn = () => setZoomDelta(z => Math.max(0.004, z * 0.6));
-  const zoomOut = () => setZoomDelta(z => Math.min(0.045, z * 1.5));
+  const zoomIn = () => {
+    if (mapplsReady && mapplsMapRef.current) {
+      try {
+        const z = mapplsMapRef.current.getZoom?.() || 15;
+        mapplsMapRef.current.setZoom(z + 1);
+        return;
+      } catch {}
+    }
+    setZoomDelta(z => Math.max(0.004, z * 0.6));
+  };
+
+  const zoomOut = () => {
+    if (mapplsReady && mapplsMapRef.current) {
+      try {
+        const z = mapplsMapRef.current.getZoom?.() || 15;
+        mapplsMapRef.current.setZoom(Math.max(4, z - 1));
+        return;
+      } catch {}
+    }
+    setZoomDelta(z => Math.min(0.045, z * 1.5));
+  };
 
   return (
     <div
       className={`relative overflow-hidden rounded-[22px] ${incidents ? 'h-[390px]' : 'h-[330px]'}`}
       style={{ border: '1px solid rgba(226, 232, 240, 0.8)', background: '#FFFFFF' }}
     >
-      {/* Live OpenStreetMap iframe */}
-      <iframe
-        title="Live Safety Map"
-        src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng-zoomDelta*1.3},${lat-zoomDelta},${lng+zoomDelta*1.3},${lat+zoomDelta}&layer=mapnik`}
-        style={{
-          width: '100%',
-          height: '100%',
-          border: 'none',
-          filter: 'contrast(1.02) saturate(1.05)',
-        }}
-        loading="lazy"
-      />
+      {/* MapmyIndia Canvas or Mapnik View */}
+      {mapplsReady ? (
+        <div ref={mapContainerRef} className="w-full h-full" />
+      ) : (
+        <iframe
+          title="Live Safety Map"
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng-zoomDelta*1.3},${lat-zoomDelta},${lng+zoomDelta*1.3},${lat+zoomDelta}&layer=mapnik`}
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            filter: 'contrast(1.02) saturate(1.05)',
+          }}
+          loading="lazy"
+        />
+      )}
+
+      {/* MapmyIndia Status Pill */}
+      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card/95 text-foreground shadow-md border border-border text-[11px] font-bold backdrop-blur-sm">
+        <span className="h-2 w-2 rounded-full bg-brand animate-pulse" />
+        <span>MapmyIndia</span>
+      </div>
 
       {/* Floating Locate Me Button */}
       <button
