@@ -6,7 +6,7 @@ import {
   ArrowLeft, ArrowRight, Bell, Check, ChevronRight, Clock3,
   LogOut, Mail, MapPin, Megaphone, MessageCircle, Phone,
   PhoneCall, PhoneOff, Plus, Settings, ShieldCheck, Siren,
-  Trash2, UserRound, Users, VolumeX, X, Sparkles, AlertTriangle
+  Trash2, UserRound, Users, VolumeX, X, Sparkles, AlertTriangle, ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useApp } from '@/context/AppContext';
@@ -148,7 +148,7 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
   const mapplsMarkerRef = useRef<any>(null);
 
   const [locating, setLocating] = useState(false);
-  const [zoomDelta, setZoomDelta] = useState(0.012);
+  const [zoomLevel, setZoomLevel] = useState(16);
   const [detectedAddress, setDetectedAddress] = useState('Connaught Place, New Delhi');
   const [mapplsReady, setMapplsReady] = useState(false);
 
@@ -171,7 +171,7 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
           }
           const map = new (window as any).mappls.Map(mapContainerRef.current, {
             center: [lat, lng],
-            zoom: 15,
+            zoom: zoomLevel,
             zoomControl: false,
           });
           mapplsMapRef.current = map;
@@ -270,23 +270,23 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
   const zoomIn = () => {
     if (mapplsReady && mapplsMapRef.current) {
       try {
-        const z = mapplsMapRef.current.getZoom?.() || 15;
-        mapplsMapRef.current.setZoom(z + 1);
+        const z = mapplsMapRef.current.getZoom?.() || 16;
+        mapplsMapRef.current.setZoom(Math.min(20, z + 1));
         return;
       } catch {}
     }
-    setZoomDelta(z => Math.max(0.004, z * 0.6));
+    setZoomLevel(z => Math.min(19, z + 1));
   };
 
   const zoomOut = () => {
     if (mapplsReady && mapplsMapRef.current) {
       try {
-        const z = mapplsMapRef.current.getZoom?.() || 15;
-        mapplsMapRef.current.setZoom(Math.max(4, z - 1));
+        const z = mapplsMapRef.current.getZoom?.() || 16;
+        mapplsMapRef.current.setZoom(Math.max(5, z - 1));
         return;
       } catch {}
     }
-    setZoomDelta(z => Math.min(0.045, z * 1.5));
+    setZoomLevel(z => Math.max(6, z - 1));
   };
 
   return (
@@ -294,19 +294,20 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
       className={`relative overflow-hidden rounded-[22px] ${incidents ? 'h-[390px]' : 'h-[330px]'}`}
       style={{ border: '1px solid rgba(226, 232, 240, 0.8)', background: '#FFFFFF' }}
     >
-      {/* MapmyIndia Canvas or Mapnik View */}
+      {/* MapmyIndia Vector Canvas or Official MapmyIndia Embed */}
       {mapplsReady ? (
         <div ref={mapContainerRef} className="w-full h-full" />
       ) : (
         <iframe
-          title="Live Safety Map"
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng-zoomDelta*1.3},${lat-zoomDelta},${lng+zoomDelta*1.3},${lat+zoomDelta}&layer=mapnik`}
+          key={`${lat.toFixed(4)}-${lng.toFixed(4)}-${zoomLevel}`}
+          title="MapmyIndia Live Safety Map"
+          src={`https://maps.mapmyindia.com/embed/@${lat},${lng},${zoomLevel}z`}
           style={{
             width: '100%',
             height: '100%',
             border: 'none',
-            filter: 'contrast(1.02) saturate(1.05)',
           }}
+          allow="geolocation; fullscreen"
           loading="lazy"
         />
       )}
@@ -314,8 +315,20 @@ function MapVisual({ incidents = false }: { incidents?: boolean }) {
       {/* MapmyIndia Status Pill */}
       <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card/95 text-foreground shadow-md border border-border text-[11px] font-bold backdrop-blur-sm">
         <span className="h-2 w-2 rounded-full bg-brand animate-pulse" />
-        <span>MapmyIndia</span>
+        <span>MapmyIndia Mappls</span>
       </div>
+
+      {/* Open full MapmyIndia navigation */}
+      <a
+        href={`https://mappls.com/@${lat},${lng},${zoomLevel}z`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open full view in MapmyIndia Mappls"
+        className="absolute bottom-16 left-3 z-20 flex items-center gap-1 px-2.5 py-1 rounded-full bg-card/90 text-foreground/80 hover:text-foreground text-[10px] font-semibold border border-border shadow-sm backdrop-blur-sm hover:bg-card transition-all"
+      >
+        <span>Open Mappls</span>
+        <ExternalLink size={11} className="text-brand" />
+      </a>
 
       {/* Floating Locate Me Button */}
       <button
