@@ -49,7 +49,7 @@ const initial: AppState = {
   channels: { whatsapp: true, sms: true, email: false },
   message: '🚨 EMERGENCY ALERT - InSafe\nI need immediate help!\n\n📍 My Live Location: {{maps_link}}\nCoordinates: {{location}}\n🕐 Sent at {{timestamp}}.',
   shareLocation: true,
-  currentLocation: { lat: 28.6315, lng: 77.2167 },
+  currentLocation: { lat: 26.4652, lng: 80.3498 },
   locationPermission: true,
 };
 
@@ -65,14 +65,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const saved = localStorage.getItem('insafe-app-v3');
       if (saved) {
         const parsed = JSON.parse(saved);
+        // Discard legacy hardcoded Delhi location if present
+        const isOldDelhi = parsed.currentLocation &&
+          Math.abs(parsed.currentLocation.lat - 28.6315) < 0.005 &&
+          Math.abs(parsed.currentLocation.lng - 77.2167) < 0.005;
+
         setState(prev => ({
           ...prev,
           ...parsed,
+          currentLocation: isOldDelhi ? { lat: 26.4652, lng: 80.3498 } : (parsed.currentLocation || prev.currentLocation),
           user: { ...prev.user, ...parsed.user },
           contacts: parsed.contacts?.length ? parsed.contacts : prev.contacts,
         }));
       }
     } catch {}
+
+    // Automatically fetch real live hardware GPS / IP location on app mount
+    requestLocation();
   }, []);
 
   useEffect(() => {
@@ -104,37 +113,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const requestLocation = async (): Promise<boolean> => {
     if (typeof window === 'undefined') return true;
-    if (!navigator.geolocation) {
-      setState(prev => ({ ...prev, locationPermission: true }));
-      return true;
-    }
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setState(prev => ({
-            ...prev,
-            currentLocation: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-            locationPermission: true,
-          }));
-          resolve(true);
-        },
-        () => {
-          // Zero alert silent fallback to New Delhi
-          setState(prev => ({
-            ...prev,
-            currentLocation: prev.currentLocation || { lat: 28.6315, lng: 77.2167 },
-            locationPermission: true,
-          }));
-          resolve(true);
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
+
+    return new Promise(async (resolve) => {
+      // 1. Try Hardware GPS first with zero cache (maximumAge: 0)
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setState(prev => ({
+              ...prev,
+              currentLocation: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+              locationPermission: true,
+            }));
+            resolve(true);
+          },
+          async () => {
+            // 2. Dynamic real network IP fallback
+            try {
+              const res = await fetch('https://ipwho.is/');
+              const data = await res.json();
+              if (data && data.success && data.latitude && data.longitude) {
+                setState(prev => ({
+                  ...prev,
+                  currentLocation: { lat: data.latitude, lng: data.longitude },
+                  locationPermission: true,
+                }));
+                resolve(true);
+                return;
+              }
+            } catch {}
+
+            // Safe fallback
+            setState(prev => ({
+              ...prev,
+              currentLocation: prev.currentLocation || { lat: 26.4652, lng: 80.3498 },
+              locationPermission: true,
+            }));
+            resolve(true);
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
+      } else {
+        resolve(true);
+      }
     });
   };
 
   const dispatchAutomatedSOS = async (currentState: AppState, isUpdate: boolean) => {
-    const lat = currentState.currentLocation?.lat || 28.6315;
-    const lng = currentState.currentLocation?.lng || 77.2167;
+    const lat = currentState.currentLocation?.lat || 26.4652;
+    const lng = currentState.currentLocation?.lng || 80.3498;
     const mapsLink = `https://www.google.com/maps?q=${lat},${lng}`;
     const timestamp = new Date().toISOString();
 
